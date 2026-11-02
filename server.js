@@ -14,13 +14,29 @@ if (!ADMIN_PASSWORD) { console.error('Thiếu biến môi trường ADMIN_PASSWO
 // ---------- Cấu hình AI chấm tự luận (chỉ ở phía máy chủ — KHÔNG đưa key xuống trình duyệt) ----------
 // Dùng chung chuẩn OpenAI Chat Completions nên tương thích OpenAI, Gemini, Groq, OpenRouter… qua AI_API_URL.
 const AI_API_KEY = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '';
-const AI_API_URL = process.env.AI_API_URL || 'https://api.openai.com/v1/chat/completions';
-const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+// Tự nhận diện nhà cung cấp theo ĐỊNH DẠNG KEY khi chưa đặt AI_API_URL/AI_MODEL —
+// tránh lỗi cấu hình phổ biến (dán key Gemini/Groq/OpenRouter nhưng để nguyên URL mặc định của OpenAI)
+function detectAiCfg(key, explicitUrl, explicitModel) {
+  let url = explicitUrl, model = explicitModel;
+  if (!url) {
+    if (/^AIza/.test(key)) { url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'; if (!model) model = 'gemini-2.0-flash'; }
+    else if (/^sk-or-/.test(key)) { url = 'https://openrouter.ai/api/v1/chat/completions'; if (!model) model = 'openai/gpt-4o-mini'; }
+    else if (/^gsk_/.test(key)) { url = 'https://api.groq.com/openai/v1/chat/completions'; if (!model) model = 'llama-3.3-70b-versatile'; }
+    else url = 'https://api.openai.com/v1/chat/completions';
+  }
+  if (!model) model = 'gpt-4o-mini';
+  return { url, model };
+}
+const _aiCfg = detectAiCfg(AI_API_KEY, process.env.AI_API_URL || '', process.env.AI_MODEL || '');
+const AI_API_URL = _aiCfg.url;
+const AI_MODEL = _aiCfg.model;
 const AI_TIMEOUT_MS = Math.max(1000, Math.min(120000, +process.env.AI_TIMEOUT_MS || 45000));
 const AI_TEMPERATURE = isFinite(+process.env.AI_TEMPERATURE) ? +process.env.AI_TEMPERATURE : 0.2;
 // Giới hạn độ dài (ký tự) để kiểm soát chi phí và tránh lạm dụng
 const AI_MAX = { question: 6000, answer: 12000, rubric: 4000, sample: 6000, comment: 800 };
 
+// Render không gắn Disk + chưa đặt DATA_DIR → dữ liệu nằm ở thư mục tạm, MẤT khi deploy lại
+const STORAGE_WARN = !!process.env.RENDER && !process.env.DATA_DIR;
 const UP_DIR = path.join(DATA_DIR, 'uploads'), DB_FILE = path.join(DATA_DIR, 'db.json');
 fs.mkdirSync(UP_DIR, { recursive: true });
 let db = { exams: {}, results: {} };
@@ -167,7 +183,7 @@ const server = http.createServer(async (req, res) => {
       failed[ip] = { n: f.n + 1, t: Date.now() };
       return send(res, 401, { error: 'Sai mật khẩu' });
     }
-    if (p === '/api/me') return send(res, 200, { admin: isAdmin(req) });
+    if (p === '/api/me') return send(res, 200, { admin: isAdmin(req), storageWarning: STORAGE_WARN });
 
     if (p === '/api/upload' && m === 'POST') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
