@@ -403,7 +403,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   </section>
 
 </main>
-<footer>Trích xuất file &amp; chấm trắc nghiệm chạy ngay trên trình duyệt. Khi bật chấm AI, máy chủ gửi câu hỏi + bài làm tới dịch vụ AI do giảng viên cấu hình để chấm TỰ ĐỘNG ngay khi nộp bài — điểm AI luôn là điểm đề xuất cần giảng viên duyệt.</footer>
+<footer>Trích xuất file &amp; chấm trắc nghiệm chạy ngay trên trình duyệt. Khi bật chấm AI, máy chủ gửi câu hỏi + bài làm tới dịch vụ AI do giảng viên cấu hình để chấm TỰ ĐỘNG TOÀN BỘ ngay khi nộp — giảng viên xem lại và phúc khảo nếu cần.</footer>
 
 <script>
 /* Adapter: cung cấp window.claude.use('user'|'db'|'assets') bằng API của server này. */
@@ -851,6 +851,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         if(given != null) mcAns[q.num] = given;
         const correctLetter = examData.answerKey[q.num];
         const item = document.createElement('div'); item.className = 'qcard';
+        item.dataset.qnum = q.num;
         item.innerHTML = '<div class="qhead"><span class="qnum">Câu '+q.num+'</span><span class="qtype">✅ Trắc nghiệm</span></div>'+
           '<div class="qstem">'+rich(q.stem)+'</div>';
         q.order.forEach(letter=>{
@@ -1008,9 +1009,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   function buildAiSetup(q, qi, cfg, onDraft){
     cfg = cfg || q.ai || {};
     const box = el('div','ai-box');
-    const head = el('label','ai-head');
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!cfg.enabled;
-    head.append(cb, el('span','','Bật chấm AI (điểm AI là điểm đề xuất — giảng viên duyệt lại)'));
+    const head = el('div','ai-head');
+    head.appendChild(el('span','','🤖 AI TỰ CHẤM câu tự luận này ngay khi sinh viên nộp bài — cấu hình bên dưới là tùy chọn:'));
     box.appendChild(head);
     if(!aiStatus.enabled) box.appendChild(el('div','ai-warn','⚠ Máy chủ chưa cấu hình AI (thiếu biến môi trường AI_API_KEY) — vẫn lưu được cấu hình nhưng chưa đề xuất tiêu chí/chấm được.'));
     const bd = el('div','ai-body');
@@ -1030,8 +1030,6 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     const sam = document.createElement('textarea'); sam.value = cfg.sampleAnswer || ''; sam.placeholder = '(Không bắt buộc)';
     bd.appendChild(sam);
     box.appendChild(bd);
-    const sync = ()=>{ bd.style.display = cb.checked ? '' : 'none'; };
-    cb.addEventListener('change', sync); sync();
     bRub.addEventListener('click', async ()=>{
       bRub.disabled = true; note.textContent = 'Đang tạo tiêu chí…';
       try{
@@ -1041,10 +1039,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       }catch(e){ note.textContent = e.message || 'Không tạo được tiêu chí.'; }
       bRub.disabled = false;
     });
-    box._read = ()=> cb.checked
-      ? {enabled: true, maxScore: msOf(ms.value,10), rubric: rub.value.trim(), sampleAnswer: sam.value.trim()}
-      : {enabled: false};
-    if(onDraft){ const fire = ()=> onDraft(box._read()); [cb,ms,rub,sam].forEach(x=>{ x.addEventListener('input',fire); x.addEventListener('change',fire); }); }
+    box._read = ()=> ({enabled: true, maxScore: msOf(ms.value,10), rubric: rub.value.trim(), sampleAnswer: sam.value.trim()});
+    if(onDraft){ const fire = ()=> onDraft(box._read()); [ms,rub,sam].forEach(x=>{ x.addEventListener('input',fire); x.addEventListener('change',fire); }); }
     return box;
   }
 
@@ -1059,9 +1055,10 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     try{ dataObj = JSON.parse(ex.data); }catch(e){}
     const qs = (dataObj && dataObj.questions) || [];
     const key0 = (dataObj && dataObj.answerKey) || {};
+    const keyA = (dataObj && dataObj.autoKey) || {};
     const panel = el('div','ai-box'); panel.style.marginTop = '14px';
-    panel.appendChild(el('h2','','🤖 Chấm AI toàn bộ bài thi — “'+ex.title+'”'));
-    panel.appendChild(el('p','muted','AI hỗ trợ cả trắc nghiệm (đề xuất đáp án đúng — giảng viên kiểm tra/chỉnh trước khi lưu) lẫn tự luận (tiêu chí + điểm đề xuất). Điểm AI luôn là điểm đề xuất cần giảng viên duyệt.'));
+    panel.appendChild(el('h2','','🤖 Cấu hình chấm tự động — “'+ex.title+'”'));
+    panel.appendChild(el('p','muted','Mọi bài nộp được chấm TOÀN BỘ tự động NGAY khi sinh viên nộp (trắc nghiệm theo đáp án, tự luận do AI chấm từng câu). Bảng này để giảng viên XEM/CHỈNH cấu hình: thời gian, đáp án trắc nghiệm, tiêu chí tự luận — không cần bấm chấm.'));
     const drafts = aiDrafts[ex.id] = aiDrafts[ex.id] || {};
     drafts.mcKey = drafts.mcKey || {};
     if(drafts.timeLimit == null) drafts.timeLimit = (dataObj && parseInt(dataObj.timeLimit, 10)) || 0;
@@ -1078,8 +1075,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     // ----- Phần trắc nghiệm: AI đề xuất đáp án đúng, giảng viên duyệt từng câu -----
     const mcQs = qs.map((q,qi)=>({q,qi})).filter(x=>x.q.type === 'mc');
     if(mcQs.length){
-      const saved = mcQs.filter(x=>key0[x.q.num] != null).length;
-      panel.appendChild(el('div','sec','✅ Trắc nghiệm — đáp án đúng (đã lưu '+saved+'/'+mcQs.length+' câu)'));
+      const saved = mcQs.filter(x=>key0[x.q.num] != null || keyA[x.q.num] != null).length;
+      panel.appendChild(el('div','sec','✅ Trắc nghiệm — đáp án đúng (đã có '+saved+'/'+mcQs.length+' câu)'));
       const r = el('div','ai-row');
       const bMc = el('button','ai-btn','✨ AI đề xuất đáp án trắc nghiệm');
       const mcNote = el('span','ai-note', drafts.mcNote || (Object.keys(drafts.mcKey).length ? ('Có '+Object.keys(drafts.mcKey).length+' đáp án AI đề xuất CHƯA LƯU — kiểm tra bảng dưới rồi bấm “💾 Lưu cấu hình”.') : 'Bấm để AI đề xuất đáp án cho những câu chưa có — bạn kiểm tra/chỉnh được trước khi lưu.'));
@@ -1119,13 +1116,14 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
           o.textContent = L + (q.options && q.options[L] ? '. '+String(q.options[L]).slice(0,40) : '');
           sel.appendChild(o);
         });
-        sel.value = drafts.mcKey[q.num] != null ? drafts.mcKey[q.num] : (key0[q.num] || '');
+        sel.value = drafts.mcKey[q.num] != null ? drafts.mcKey[q.num] : (key0[q.num] || keyA[q.num] || '');
         sel.addEventListener('change', ()=>{ if(sel.value) drafts.mcKey[q.num] = sel.value; else delete drafts.mcKey[q.num]; drafts.mcNote = ''; });
         tdS.appendChild(sel); tr.appendChild(tdS);
         const tdTag = el('td');
         if(drafts.mcKey[q.num] != null && key0[q.num] == null) tdTag.appendChild(el('span','ai-sugg','🤖 AI đề xuất — chưa lưu'));
         else if(drafts.mcKey[q.num] != null && key0[q.num] != null && drafts.mcKey[q.num] !== key0[q.num]) tdTag.appendChild(el('span','ai-sugg','Sửa: '+key0[q.num]+' → '+drafts.mcKey[q.num]));
-        else if(key0[q.num] != null) tdTag.appendChild(el('span','ai-note','Đã lưu: '+key0[q.num]));
+        else if(key0[q.num] != null) tdTag.appendChild(el('span','ai-note','Đã duyệt: '+key0[q.num]));
+        else if(keyA[q.num] != null) tdTag.appendChild(el('span','ai-sugg','🤖 AI tự xác định khi chấm: '+keyA[q.num]+' — chưa duyệt'));
         tr.appendChild(tdTag);
         t.appendChild(tr);
       });
@@ -1135,7 +1133,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     // ----- Phần tự luận: tiêu chí chấm AI (xem/chỉnh trước khi chấm) -----
     const esQs = qs.map((q,qi)=>({q,qi})).filter(x=>x.q.type === 'essay');
     if(esQs.length){
-      panel.appendChild(el('div','sec','📝 Tự luận — tiêu chí chấm AI'));
+      panel.appendChild(el('div','sec','📝 Tự luận — điểm tối đa & tiêu chí (tùy chọn, AI tự chấm khi nộp)'));
       esQs.forEach(({q,qi})=>{
         const wrap = el('div',''); wrap.style.marginTop = '12px';
         wrap.appendChild(el('span','qnum','Câu '+q.num));
@@ -1149,18 +1147,13 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       });
     }
     if(!mcQs.length && !esQs.length){ panel.appendChild(el('p','muted','Đề này không có câu hỏi nào để chấm.')); return panel; }
-    const opt = el('label','ai-head'); opt.style.marginTop = '12px';
-    const force = document.createElement('input'); force.type = 'checkbox';
-    opt.append(force, el('span','','Chấm lại cả những câu tự luận đã có điểm AI'));
-    panel.appendChild(opt);
     const btnRow = el('div','row'); btnRow.style.marginTop = '10px';
     const bSave = el('button','ai-btn','💾 Lưu cấu hình');
-    const bRun = el('button','primary ai-btn','▶ Chấm AI toàn bộ bài thi');
-    if(aiBusy){ bSave.disabled = true; bRun.disabled = true; }
+    if(aiBusy){ bSave.disabled = true; }
     bSave.addEventListener('click', async ()=>{ if(await saveAiCfg(ex, setups)){ drafts.mcNote = ''; toast('💾 Đã lưu cấu hình chấm AI ✓'); renderDash(); } });
-    bRun.addEventListener('click', ()=> runFullGrading(ex, setups, qs, force.checked));
-    btnRow.append(bSave, bRun);
+    btnRow.append(bSave);
     panel.appendChild(btnRow);
+    panel.appendChild(el('p','muted','Giảng viên không cần bấm chấm: mọi bài nộp đã được chấm tự động khi nộp. Muốn phúc khảo điểm tự luận AI, nhập điểm chính thức ở bảng kết quả.'));
     const prog = el('div','ai-progress',''); prog.id = 'aiProg_'+ex.id;
     prog.textContent = (aiProg && aiProg.exId === ex.id) ? aiProg.text : '';
     panel.appendChild(prog);
@@ -1175,7 +1168,9 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     if(d.timeLimit != null) dataObj.timeLimit = d.timeLimit;
     if(d.mcKey){
       dataObj.answerKey = Object.assign({}, dataObj.answerKey || {});
-      Object.entries(d.mcKey).forEach(([num, L])=>{ if(L) dataObj.answerKey[num] = L; else delete dataObj.answerKey[num]; });
+      dataObj.autoKey = Object.assign({}, dataObj.autoKey || {});
+      Object.entries(d.mcKey).forEach(([num, L])=>{ if(L){ dataObj.answerKey[num] = L; delete dataObj.autoKey[num]; } else delete dataObj.answerKey[num]; });
+      if(!Object.keys(dataObj.autoKey).length) delete dataObj.autoKey;
     }
     (dataObj.questions || []).forEach((q,qi)=>{ if(q.type === 'essay' && setups && setups[qi]) q.ai = setups[qi]._read(); });
     const newData = JSON.stringify(dataObj);
@@ -1185,73 +1180,6 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       setProg(ex.id, 'Đã lưu cấu hình chấm AI ✓ (đáp án TN: '+Object.keys(dataObj.answerKey || {}).length+' câu · thời gian: '+(dataObj.timeLimit || 0)+' phút)');
       return true;
     }catch(e){ setProg(ex.id, 'Không lưu được cấu hình: '+(e.message || e)); return false; }
-  }
-
-  // "Chấm AI toàn bộ bài thi": tính lại điểm TN theo đáp án hiện tại (từ lựa chọn đã lưu) + AI chấm từng bài tự luận
-  async function runFullGrading(ex, setups, qs, force){
-    if(aiBusy) return;
-    const cfgs = [];
-    qs.forEach((q,qi)=>{
-      if(q.type !== 'essay' || !setups[qi]) return;
-      const c = setups[qi]._read();
-      if(c.enabled) cfgs.push(Object.assign({qi, q}, c));
-    });
-    aiBusy = true;
-    try{
-      if(!(await saveAiCfg(ex, setups))) return;
-      let cur; try{ cur = JSON.parse(ex.data); }catch(e){ cur = {questions: [], answerKey: {}}; }
-      const key = cur.answerKey || {};
-      const hasKey = Object.keys(key).length > 0;
-      if(!hasKey && !cfgs.length){ setProg(ex.id, 'Chưa có gì để chấm: đề chưa có đáp án trắc nghiệm (hãy bấm “✨ AI đề xuất đáp án trắc nghiệm”) và chưa bật AI cho câu tự luận nào.'); return; }
-      let nStu = 0, mcN = 0, okN = 0, skipOld = 0; const errs = [];
-      const docs = resultsCache.slice();
-      for(const rdoc of docs){
-        const attCheck = (rdoc.attempts || {})[ex.id]; if(!attCheck) continue;
-        setProg(ex.id, 'Đang chấm bài '+(nStu+1)+'… ('+((attCheck.name || rdoc.uid)+'').slice(0,40)+')');
-        const ref = db.doc('results/'+rdoc.uid);
-        let fresh = null;
-        try{ const snap = await ref.get(); fresh = snap.exists ? (snap.data() || {}) : null; }catch(e){}
-        const att = fresh && (fresh.attempts || {})[ex.id];
-        nStu++;
-        if(!att) continue;
-        let changed = false;
-        // Tính lại điểm trắc nghiệm theo đáp án hiện tại (chỉ với bài có lưu lựa chọn)
-        if(hasKey){
-          if(att.mc && Object.keys(att.mc).length){
-            let correct = 0, total = 0;
-            (cur.questions || []).forEach(q=>{
-              if(q.type !== 'mc' || key[q.num] == null) return;
-              total++;
-              if(att.mc[q.num] === key[q.num]) correct++;
-            });
-            if(total){ att.score = correct; att.total = total; changed = true; mcN++; }
-          } else if(att.score == null){ skipOld++; }
-        }
-        // AI chấm tự luận (bỏ qua câu chưa trả lời)
-        let es = {}; try{ es = JSON.parse(att.essays || '{}'); }catch(e){}
-        for(const c of cfgs){
-          const ans = (es[c.qi] || '').trim();
-          if(!ans) continue; // sinh viên chưa trả lời → không chấm
-          const prev = att.ai && att.ai[c.qi];
-          if(!force && prev && typeof prev.score === 'number') continue; // đã có điểm AI
-          try{
-            const r = await aiApi('grade', {question: plainStem(c.q), answer: ans, maxScore: c.maxScore, rubric: c.rubric, sampleAnswer: c.sampleAnswer});
-            att.ai = att.ai || {};
-            att.ai[c.qi] = {score: r.score, comment: r.comment || '', max: r.maxScore || c.maxScore, at: Date.now()};
-            changed = true; okN++;
-          }catch(e){ errs.push('Câu '+c.q.num+' — '+((att.name || rdoc.uid)+'').slice(0,40)+': '+(e.message || e)); }
-        }
-        if(changed){
-          try{ await ref.set({uid: rdoc.uid, attempts: fresh.attempts}); }
-          catch(e){ errs.push('Không lưu được kết quả của '+((att.name || rdoc.uid)+'').slice(0,40)+': '+(e.message || e)); }
-        }
-      }
-      if(!nStu){ setProg(ex.id, 'Chưa có sinh viên nào nộp bài cho đề này.'); return; }
-      setProg(ex.id, 'Hoàn tất '+nStu+' bài đã xử lý — Trắc nghiệm: '+mcN+' bài tính lại điểm theo đáp án · Tự luận: '+okN+' câu AI chấm.'+(skipOld ? ('\n⚠ '+skipOld+' bài nộp cũ không lưu lựa chọn trắc nghiệm nên không thể chấm lại phần TN (các phần khác vẫn chấm bình thường).') : '')+(errs.length ? ('\nLỗi '+errs.length+' — '+errs.slice(0,3).join(' | ')+(errs.length > 3 ? ' …' : '')) : '')+'\nĐiểm AI là ĐIỂM ĐỀ XUẤT — hãy kiểm tra và nhập điểm chính thức trong bảng kết quả.');
-      if(mcN + okN) toast('🤖 Đã chấm xong '+nStu+' bài!');
-    }catch(e){
-      setProg(ex.id, 'Lỗi khi chấm AI: '+(e.message || e));
-    }finally{ aiBusy = false; renderDash(); }
   }
 
   // Giảng viên nhập/sửa điểm chính thức cho 1 câu tự luận (ghi vào trường mới att.man — dữ liệu cũ giữ nguyên)
@@ -1333,8 +1261,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       + (lim ? '<li>Đồng hồ <b>đếm ngược '+lim+' phút</b> bắt đầu ngay khi bấm “Bắt đầu” — hết giờ bài sẽ được <b>tự động nộp</b>.</li>' : '<li>Đồng hồ sẽ đếm thời gian làm bài — bấm <b>Nộp bài</b> khi hoàn thành.</li>')
       + '<li>Có thể nộp sớm bất cứ lúc nào bằng nút <b>📮 Nộp bài</b> ở cuối trang.</li>'
       + '<li>Không tải lại trang khi đang làm bài (bài chưa nộp sẽ mất).</li>'
-      + '<li>Câu tự luận sẽ được giảng viên chấm (có thể có AI hỗ trợ chấm điểm đề xuất).</li>'
-      + '<li>Nộp bài xong hệ thống <b>chấm ngay lập tức</b>: điểm trắc nghiệm + điểm AI đề xuất từng câu tự luận; bấm <b>🔍 Xem lại bài làm</b> để xem đáp án — câu bạn bỏ trống được đánh dấu <b>màu cam</b>.</li></ul>';
+      + '<li>Đây là <b>bài thi chính thức</b>: nộp bài xong hệ thống <b>chấm TOÀN BỘ và công bố điểm NGAY LẬP TỨC</b> — trắc nghiệm theo đáp án, tự luận do AI chấm từng câu.</li>'
+      + '<li>Bấm <b>🔍 Xem lại bài làm</b> để xem đáp án từng câu — câu bạn bỏ trống được đánh dấu <b>màu cam</b>.</li></ul>';
     sc.appendChild(rules);
     const row = el('div','row'); row.style.justifyContent = 'center';
     const b = el('button','start-btn','🚀 Bắt đầu làm bài');
@@ -1392,13 +1320,29 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     const t = bd.totals || {}, sc = $('scoreCard');
     let html = '';
     if(t.hasKey && t.mcTotal) html += '<div class="score-num">'+t.mcScore+'/'+t.mcTotal+'</div><div class="score-label">câu trắc nghiệm đúng</div>';
-    if(t.aiCount) html += '<div class="score-num" style="font-size:30px;margin-top:6px">🤖 '+t.aiScore+'/'+t.aiMax+'</div><div class="score-label">điểm tự luận AI đề xuất ('+t.aiCount+' câu đã chấm)</div>';
+    if(t.aiCount) html += '<div class="score-num" style="font-size:30px;margin-top:6px">🤖 '+t.aiScore+'/'+t.aiMax+'</div><div class="score-label">điểm tự luận AI chấm ('+t.aiCount+' câu)</div>';
     if(!html) html = '<div class="score-num">✓</div><div class="score-label">Đã nộp bài — đề chưa có đáp án trắc nghiệm và chưa bật AI cho câu tự luận nào</div>';
-    if(t.hasKey || t.aiCount) html += '<div class="score-label" style="margin-top:8px;font-size:15px"><b>TỔNG CỘNG: '+t.total+' điểm</b> (trắc nghiệm + tự luận AI đề xuất)</div>';
+    if(t.hasKey || t.aiCount) html += '<div class="score-label" style="margin-top:8px;font-size:15px"><b>TỔNG CỘNG: '+t.total+' điểm</b> (trắc nghiệm + tự luận AI chấm)</div>';
     html += bd.aiConfigured
-      ? '<div class="score-label">Điểm tự luận là điểm AI đề xuất — giảng viên sẽ duyệt lại.</div>'
+      ? '<div class="score-label">Điểm chấm TỰ ĐỘNG khi nộp bài — giảng viên xem lại và có thể phúc khảo/điều chỉnh.</div>'
       : '<div class="score-label" style="color:#E65100">⚠ Máy chủ chưa bật AI (thiếu AI_API_KEY) — câu tự luận chờ giảng viên chấm.</div>';
     sc.innerHTML = html;
+    // Câu trắc nghiệm mà đáp án được AI xác định SAU khi nộp (đề chưa có đáp án): bù kết quả vào card
+    Object.keys(bd.mc || {}).forEach(num=>{
+      const e = bd.mc[num];
+      const cardEl = document.querySelector('#resultList .qcard[data-qnum="'+num+'"]');
+      if(!cardEl || cardEl.dataset.graded || e.correct == null) return;
+      cardEl.dataset.graded = '1';
+      cardEl.querySelectorAll('.opt').forEach(row=>{
+        const letter = ((row.querySelector('.opt-letter') || {}).textContent || '').trim().replace('.','').charAt(0);
+        if(letter === e.correct) row.classList.add(e.answered ? 'correct' : 'blankok');
+        if(e.given && letter === e.given && e.given !== e.correct) row.classList.add('wrong');
+      });
+      const v = document.createElement('div');
+      v.className = 'verdict ' + (e.ok ? 'good' : (e.answered ? 'bad' : 'blank'));
+      v.textContent = (e.ok ? '✅ Đúng' : (e.answered ? '❌ Bạn chọn '+e.given+' — đáp án đúng là '+e.correct : '⬜ Bạn KHÔNG làm câu này — đáp án đúng là '+e.correct+' (màu cam)')) + (e.keySource === 'ai' ? ' · 🤖 đáp án do AI xác định' : '');
+      cardEl.appendChild(v);
+    });
     Object.keys(bd.essays || {}).forEach(qi=>{
       const v = document.querySelector('[data-aiv="'+qi+'"]'); if(!v) return;
       const e = bd.essays[qi];
@@ -1413,7 +1357,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   function openReview(ex, att, back){
     reviewBack = back || 'list';
     let d = {questions: []}; try{ d = JSON.parse(ex.data) || d; }catch(e){}
-    const qs = d.questions || [], key = d.answerKey || {};
+    const qs = d.questions || [], key0 = d.answerKey || {}, keyA = d.autoKey || {};
     let es = {}; try{ es = JSON.parse(att.essays || '{}'); }catch(e){}
     const mcA = att.mc || {}, ai = att.ai || {};
     const head = $('reviewHead'); head.innerHTML = '';
@@ -1438,7 +1382,9 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       const st = el('div','qstem'); st.innerHTML = rich(q.stem); item.appendChild(st);
       if(q.type === 'mc'){
         const given = mcA[q.num] != null ? String(mcA[q.num]) : null;
-        const cl = key[q.num] != null ? String(key[q.num]) : null;
+        const gvK = key0[q.num] != null;
+        const cl = gvK ? String(key0[q.num]) : (keyA[q.num] != null ? String(keyA[q.num]) : null);
+        const srcTag = gvK ? '' : ' · 🤖 đáp án AI';
         (q.order || Object.keys(q.options || {})).forEach(letter=>{
           const row = el('div','opt');
           if(cl && letter === cl) row.classList.add(given ? 'correct' : 'blankok');
@@ -1448,9 +1394,9 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         });
         const v = el('div','verdict');
         if(!cl){ v.style.color = 'var(--ink-soft)'; v.textContent = given ? 'Bạn chọn '+given+' — đề chưa có đáp án cho câu này.' : 'Bạn không làm câu này — đề chưa có đáp án.'; }
-        else if(given == null){ v.className = 'verdict blank'; v.textContent = '⬜ Bạn KHÔNG làm câu này — đáp án đúng là '+cl+' (hiện màu cam).'; }
-        else if(given === cl){ v.className = 'verdict good'; v.textContent = '✅ Đúng — bạn chọn '+given+'.'; }
-        else { v.className = 'verdict bad'; v.textContent = '❌ Bạn chọn '+given+' — đáp án đúng là '+cl+'.'; }
+        else if(given == null){ v.className = 'verdict blank'; v.textContent = '⬜ Bạn KHÔNG làm câu này — đáp án đúng là '+cl+' (hiện màu cam)'+srcTag+'.'; }
+        else if(given === cl){ v.className = 'verdict good'; v.textContent = '✅ Đúng — bạn chọn '+given+srcTag+'.'; }
+        else { v.className = 'verdict bad'; v.textContent = '❌ Bạn chọn '+given+' — đáp án đúng là '+cl+srcTag+'.'; }
         item.appendChild(v);
       } else {
         const txt = typeof es[qi] === 'string' ? es[qi] : '';
@@ -1501,7 +1447,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       const b2 = el('button','',ex.status === 'closed' ? 'Mở lại' : 'Đóng đề'); b2.addEventListener('click', ()=> db.doc('exams/'+ex.id).update({status: ex.status === 'closed' ? 'open' : 'closed'}));
       let hasQ = false; try{ hasQ = ((JSON.parse(ex.data).questions || []).length) > 0; }catch(e){}
       let b4 = null;
-      if(hasQ){ b4 = el('button','', aiOpen === ex.id ? 'Ẩn chấm AI' : '🤖 Chấm AI toàn bài'); b4.addEventListener('click', ()=>{ aiOpen = aiOpen === ex.id ? null : ex.id; renderDash(); }); }
+      if(hasQ){ b4 = el('button','', aiOpen === ex.id ? 'Ẩn cấu hình' : '🤖 Cấu hình chấm AI'); b4.addEventListener('click', ()=>{ aiOpen = aiOpen === ex.id ? null : ex.id; renderDash(); }); }
       const b3 = el('button','ghost','Xóa đề'); b3.addEventListener('click', ()=>{ if(confirm('Xóa đề "'+ex.title+'"?')) db.doc('exams/'+ex.id).delete(); });
       bar.append(b1,b2); if(b4) bar.append(b4); bar.append(b3); c.appendChild(bar);
       if(selExam === ex.id){
