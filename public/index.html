@@ -237,6 +237,28 @@ button:disabled{opacity:.45; cursor:not-allowed; transform:none !important;}
 .ai-warn{font-size:12.5px;color:var(--bad);margin-top:6px;font-weight:600;}
 .ai-sugg{display:inline-block;font-size:11.5px;font-weight:800;color:#fff;background:var(--grad);border-radius:14px;padding:2px 10px;margin-top:6px;box-shadow:0 4px 12px rgba(124,58,237,.3);}
 .ai-mini{font-size:11px;font-weight:700;color:#7B2FD6;white-space:nowrap;}
+/* ---- Chấm tự động khi nộp bài + xem lại bài làm & đáp án ---- */
+.opt.blankok{background:rgba(255,152,0,.16)!important;border:2px dashed #FF9800!important;}
+.opt.blankok .opt-letter{color:#E65100;font-weight:800;}
+.verdict.blank{background:rgba(255,152,0,.14);color:#E65100;border:1px dashed #FF9800;}
+.verdict.ai{background:linear-gradient(135deg,rgba(123,47,214,.16),rgba(233,30,140,.12));color:#7B2FD6;border:1px solid rgba(123,47,214,.35);}
+.ai-badge{display:inline-block;padding:3px 10px;border-radius:999px;background:linear-gradient(135deg,#7B2FD6,#E91E8C);color:#fff;font-weight:700;font-size:12.5px;margin-right:6px;}
+.rev-legend{display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;margin:10px 0;font-size:12.5px;color:var(--ink-soft);}
+.rev-legend span{display:inline-flex;align-items:center;gap:6px;}
+.rev-legend i{width:12px;height:12px;border-radius:4px;display:inline-block;}
+.grading-overlay{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:rgba(10,10,25,.55);backdrop-filter:blur(6px);}
+.grading-box{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 34px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35);max-width:430px;margin:0 16px;}
+.spin{width:46px;height:46px;margin:0 auto 14px;border-radius:50%;border:4px solid rgba(123,47,214,.25);border-top-color:#7B2FD6;animation:rot .9s linear infinite;}
+@keyframes rot{to{transform:rotate(360deg);}}
+.grading-msg{font-weight:700;margin-bottom:6px;}
+.rev-sum{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px;}
+.rev-sum span{background:rgba(123,47,214,.1);border:1px solid rgba(123,47,214,.3);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600;}
+.rev-empty{color:#E65100;background:rgba(255,152,0,.12);border:1px dashed #FF9800;border-radius:12px;padding:8px 12px;margin-top:8px;font-weight:600;}
+@media (prefers-color-scheme: dark){
+  .verdict.ai{color:#C9A6FF;}
+  .verdict.blank,.rev-empty{color:#FFB74D;}
+  .opt.blankok .opt-letter{color:#FFB74D;}
+}
 .ai-comment{font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:pre-wrap;}
 .ai-progress{font-size:13px;color:var(--ink-soft);margin-top:10px;white-space:pre-wrap;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:9px 12px;}
 .man-score{width:115px;border:1px solid var(--line);border-radius:9px;padding:6px 8px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:13px;margin-top:6px;outline:none;font-weight:700;}
@@ -365,12 +387,23 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     <div class="card score-card" id="scoreCard"></div>
     <div id="resultList"></div>
     <div class="row">
+      <button class="primary" id="btnReview" style="display:none">🔍 Xem lại bài làm &amp; đáp án</button>
       <button class="primary" id="btnRestart">Về trang chủ</button>
     </div>
   </section>
 
+  <!-- SCREEN 5: XEM LẠI BÀI LÀM & ĐÁP ÁN -->
+  <section id="screen-review" class="hidden">
+    <div class="card score-card" id="reviewHead"></div>
+    <div class="rev-legend" id="reviewLegend"></div>
+    <div id="reviewList"></div>
+    <div class="row">
+      <button class="primary" id="btnReviewBack">← Quay lại</button>
+    </div>
+  </section>
+
 </main>
-<footer>Trích xuất file &amp; chấm trắc nghiệm chạy ngay trên trình duyệt. Khi bật chấm AI (trắc nghiệm + tự luận), câu hỏi và bài làm được gửi qua máy chủ của trang này tới dịch vụ AI do giảng viên cấu hình — điểm AI luôn là điểm đề xuất cần giảng viên duyệt.</footer>
+<footer>Trích xuất file &amp; chấm trắc nghiệm chạy ngay trên trình duyệt. Khi bật chấm AI, máy chủ gửi câu hỏi + bài làm tới dịch vụ AI do giảng viên cấu hình để chấm TỰ ĐỘNG ngay khi nộp bài — điểm AI luôn là điểm đề xuất cần giảng viên duyệt.</footer>
 
 <script>
 /* Adapter: cung cấp window.claude.use('user'|'db'|'assets') bằng API của server này. */
@@ -456,12 +489,13 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const screens = ['home','list','start','dash','upload','preview','exam','result'].reduce((o,k)=>(o[k]=$('screen-'+k),o),{});
+  const screens = ['home','list','start','dash','upload','preview','exam','result','review'].reduce((o,k)=>(o[k]=$('screen-'+k),o),{});
   function show(name){ Object.entries(screens).forEach(([k,el])=> el.classList.toggle('hidden', k!==name)); }
 
   let examData = null; // {title, intro, questions:[], answerKey:{}}
   let timerHandle = null, startTime = null, timerLimit = 0, submitted = false;
   let mode = 'teacher', curExam = null, db = null, uid = null, isAdmin = false, examsCache = [], resultsCache = [], selExam = null, stu = {name:'', sid:''};
+  let lastBd = null, lastAtt = null, myAtt = {}, reviewBack = 'list';
   // Trạng thái chấm AI: aiStatus (máy chủ có cấu hình AI không), aiBoxes (panel cấu hình khi tạo đề),
   // aiOpen (đề đang mở panel chấm AI trên dashboard), aiBusy (đang chấm), aiProg (tiến độ), aiDrafts (bản nháp cấu hình)
   let aiStatus = {enabled:false, model:null}, aiBoxes = {}, aiOpen = null, aiBusy = false, aiProg = null, aiDrafts = {};
@@ -793,7 +827,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   }
 
   // ---------- SUBMIT / GRADE ----------
-  function submitExam(auto){
+  async function submitExam(auto){
     if(mode === 'student'){
       if(submitted) return;
       if(!auto){
@@ -821,7 +855,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
           '<div class="qstem">'+rich(q.stem)+'</div>';
         q.order.forEach(letter=>{
           const row = document.createElement('div'); row.className = 'opt';
-          if(hasKey && letter === correctLetter) row.classList.add('correct');
+          if(hasKey && letter === correctLetter) row.classList.add(given ? 'correct' : 'blankok');
           if(hasKey && letter === given && given !== correctLetter) row.classList.add('wrong');
           row.innerHTML = '<span class="opt-letter">'+letter+'.</span><span>'+rich(q.options[letter])+(letter===given?'  ← bạn chọn':'')+'</span>';
           item.appendChild(row);
@@ -829,8 +863,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         if(hasKey){
           const ok = given === correctLetter;
           if(ok) correct++;
-          const v = document.createElement('div'); v.className = 'verdict ' + (ok?'good':'bad');
-          v.textContent = ok ? 'Đúng' : (given ? 'Sai — đáp án đúng là '+correctLetter : 'Chưa trả lời — đáp án đúng là '+correctLetter);
+          const v = document.createElement('div'); v.className = 'verdict ' + (ok ? 'good' : (given ? 'bad' : 'blank'));
+          v.textContent = ok ? 'Đúng' : (given ? 'Sai — đáp án đúng là '+correctLetter : '⬜ Bạn KHÔNG làm câu này — đáp án đúng là '+correctLetter+' (đánh dấu màu cam)');
           item.appendChild(v);
         } else if(!given){
           const v = document.createElement('div'); v.className = 'verdict bad'; v.textContent = 'Chưa trả lời';
@@ -843,21 +877,27 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         item.innerHTML = '<div class="qhead"><span class="qnum">Câu '+q.num+'</span><span class="qtype">📝 Tự luận</span></div>'+
           '<div class="qstem">'+rich(q.stem)+'</div>'+
           '<div class="qstem" style="margin-top:10px; color:var(--ink-soft);">'+(ta.value.trim() ? escapeHtml(ta.value) : '(chưa trả lời)')+'</div>'+
-          '<div class="verdict" style="color:var(--ink-soft);">Câu tự luận — cần chấm thủ công</div>';
+          (ta.value.trim() ? '<div class="verdict ai" data-aiv="'+qi+'">🤖 Đang chờ AI chấm câu này…</div>' : '<div class="verdict blank">⬜ Bạn KHÔNG làm câu này — không chấm.</div>');
         resultList.appendChild(item);
       }
     });
 
     const scoreCard = $('scoreCard');
-    if(hasKey && mcTotal > 0){
+    if(mode === 'student'){
+      scoreCard.innerHTML = '<div class="score-num">…</div><div class="score-label">💾 Đang lưu bài làm & chấm AI tự động từng câu…</div>';
+    } else if(hasKey && mcTotal > 0){
       scoreCard.innerHTML = '<div class="score-num">'+correct+'/'+mcTotal+'</div><div class="score-label">câu trắc nghiệm đúng'+
         (examData.questions.length > mcTotal ? ' · phần tự luận cần chấm thủ công' : '')+'</div>';
     } else {
       scoreCard.innerHTML = '<div class="score-num">✓</div><div class="score-label">Đã nộp bài — không tìm thấy đáp án trong file để tự chấm trắc nghiệm</div>';
     }
-    afterSubmit(correct, mcTotal, hasKey, mcAns);
     show('result');
-    if(mode === 'student'){ toast(auto ? '⏰ Hết giờ — bài đã được tự động nộp!' : '🎉 Đã nộp bài thành công!'); confetti(); }
+    if(mode === 'student'){
+      toast(auto ? '⏰ Hết giờ — bài đã được tự động nộp!' : '🎉 Đã nộp bài thành công!'); confetti();
+      $('btnReview').style.display = '';
+      await afterSubmit(correct, mcTotal, hasKey, mcAns);
+      await runAutoGrade();
+    }
   }
   $('btnSubmit').addEventListener('click', ()=> submitExam(false));
 
@@ -865,6 +905,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     examData = null; IMGS = {}; imgSeq = 0; $('imgStrip').innerHTML = ''; fileInput.value=''; $('rawText').value=''; uploadStatus.classList.remove('show');
     goHome();
   });
+  $('btnReview').addEventListener('click', ()=>{ if(curExam && lastAtt) openReview(curExam, lastAtt, 'result'); });
+  $('btnReviewBack').addEventListener('click', ()=> show(reviewBack === 'result' && curExam ? 'result' : 'list'));
 
   // ---------- TIMER (đếm ngược nếu đề đặt thời gian; hết giờ TỰ ĐỘNG NỘP) ----------
   const mmss = s => String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
@@ -1224,7 +1266,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     catch(e){ alert('Không lưu được điểm: '+(e.message || e)); }
   }
 
-  function renderList(){
+  async function renderList(){
     const box = $('examList'); box.innerHTML = '';
     const open = examsCache.filter(e=>e.status !== 'closed');
     if(!db) box.appendChild(el('p','muted','Chưa kết nối được máy chủ — hãy tải lại trang.'));
@@ -1236,6 +1278,29 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       const b = el('button','primary','Làm bài'); b.addEventListener('click', ()=> openExam(ex)); c.appendChild(b);
       box.appendChild(c);
     });
+    // Mục xem lại: các đề bạn đã nộp (kể cả đề đã đóng) — xem bài làm + đáp án từng câu
+    if(db && uid){
+      try{ const snap = await db.doc('results/'+uid).get(); myAtt = (snap.exists && ((snap.data() || {}).attempts)) || {}; }catch(e){ myAtt = {}; }
+      const done = examsCache.filter(ex => myAtt[ex.id]);
+      if(done.length){
+        box.appendChild(el('h2','','📚 Bài bạn đã nộp — xem lại bài làm & đáp án'));
+        done.forEach(ex=>{
+          const att = myAtt[ex.id];
+          const c = el('div','qcard'), hd = el('div','qhead');
+          hd.append(el('span','qnum',ex.title), el('span','qtype','Đã nộp '+fmt(att.at || 0)));
+          c.append(hd);
+          const line = [];
+          if(att.score != null) line.push('✅ TN '+att.score+'/'+att.total);
+          const aiK = Object.keys(att.ai || {});
+          if(aiK.length) line.push('🤖 TL '+aiK.length+' câu đã chấm');
+          c.appendChild(el('p','muted', line.join(' · ') || 'Chưa có điểm'));
+          const b = el('button','primary','🔍 Xem lại bài làm & đáp án');
+          b.addEventListener('click', ()=> openReview(ex, att, 'list'));
+          c.appendChild(b);
+          box.appendChild(c);
+        });
+      }
+    }
   }
   function openExam(ex){
     stu = {name: $('stuName').value.trim(), sid: $('stuId').value.trim()};
@@ -1268,7 +1333,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       + (lim ? '<li>Đồng hồ <b>đếm ngược '+lim+' phút</b> bắt đầu ngay khi bấm “Bắt đầu” — hết giờ bài sẽ được <b>tự động nộp</b>.</li>' : '<li>Đồng hồ sẽ đếm thời gian làm bài — bấm <b>Nộp bài</b> khi hoàn thành.</li>')
       + '<li>Có thể nộp sớm bất cứ lúc nào bằng nút <b>📮 Nộp bài</b> ở cuối trang.</li>'
       + '<li>Không tải lại trang khi đang làm bài (bài chưa nộp sẽ mất).</li>'
-      + '<li>Câu tự luận sẽ được giảng viên chấm (có thể có AI hỗ trợ chấm điểm đề xuất).</li></ul>';
+      + '<li>Câu tự luận sẽ được giảng viên chấm (có thể có AI hỗ trợ chấm điểm đề xuất).</li>'
+      + '<li>Nộp bài xong hệ thống <b>chấm ngay lập tức</b>: điểm trắc nghiệm + điểm AI đề xuất từng câu tự luận; bấm <b>🔍 Xem lại bài làm</b> để xem đáp án — câu bạn bỏ trống được đánh dấu <b>màu cam</b>.</li></ul>';
     sc.appendChild(rules);
     const row = el('div','row'); row.style.justifyContent = 'center';
     const b = el('button','start-btn','🚀 Bắt đầu làm bài');
@@ -1286,9 +1352,123 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
       const ref = db.doc('results/'+uid), snap = await ref.get();
       const att = snap.exists ? ((snap.data()||{}).attempts || {}) : {};
       att[curExam.id] = {name:stu.name, sid:stu.sid, score: hasKey ? correct : null, total: hasKey ? total : null, at: Date.now(), essays: JSON.stringify(essays).slice(0,20000), mc: mcAns || {}};
+      lastAtt = att[curExam.id];
       await ref.set({uid, attempts: att});
       note.textContent = 'Đã lưu kết quả lên hệ thống ✓';
     }catch(e){ console.error(e); note.textContent = 'Không lưu được kết quả lên hệ thống — hãy chụp màn hình gửi giảng viên.'; }
+  }
+
+  // ---------- CHẤM TỰ ĐỘNG NGAY KHI NỘP (gọi máy chủ) + XEM LẠI BÀI LÀM ----------
+  function showGrading(){
+    const ov = document.createElement('div'); ov.className = 'grading-overlay';
+    ov.innerHTML = '<div class="grading-box"><div class="spin"></div><div class="grading-msg">💾 Đang lưu bài làm…</div><div class="muted">AI chấm ngay từng câu bạn đã trả lời — câu bỏ trống sẽ không chấm.</div></div>';
+    document.body.appendChild(ov);
+    setTimeout(()=>{ const mm = ov.querySelector('.grading-msg'); if(mm) mm.textContent = '🤖 AI đang chấm từng câu…'; }, 1200);
+    return ov;
+  }
+  async function runAutoGrade(){
+    if(!curExam || !uid) return;
+    const ov = showGrading();
+    let bd = null;
+    try{
+      const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), 150000);
+      const r = await fetch('/api/ai/auto-grade', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({examId: curExam.id, uid: uid}), signal: ctl.signal});
+      clearTimeout(to);
+      const j = await r.json().catch(()=>null);
+      if(!r.ok || !j) throw new Error((j && j.error) || ('Lỗi ' + r.status));
+      bd = j;
+    }catch(e){ console.error('auto-grade:', e); }
+    ov.remove();
+    if(bd){ lastBd = bd; applyBreakdown(bd); return; }
+    const sc = $('scoreCard');
+    const note = el('div','score-label','⚠ Không chấm tự động được lúc nộp (mất kết nối hoặc máy chủ lỗi) — kết quả trắc nghiệm phía dưới vẫn được giữ; giảng viên có thể chấm AI sau từ bảng điều khiển.');
+    note.style.color = '#E65100'; sc.appendChild(note);
+    document.querySelectorAll('[data-aiv]').forEach(v=>{ v.className = 'verdict'; v.style.color = 'var(--ink-soft)'; v.textContent = 'Câu tự luận — chờ giảng viên chấm.'; });
+    const b = el('button','primary','🤖 Thử chấm lại AI'); b.style.marginTop = '8px';
+    b.addEventListener('click', ()=>{ b.remove(); note.remove(); runAutoGrade(); });
+    sc.appendChild(b);
+  }
+  function applyBreakdown(bd){
+    const t = bd.totals || {}, sc = $('scoreCard');
+    let html = '';
+    if(t.hasKey && t.mcTotal) html += '<div class="score-num">'+t.mcScore+'/'+t.mcTotal+'</div><div class="score-label">câu trắc nghiệm đúng</div>';
+    if(t.aiCount) html += '<div class="score-num" style="font-size:30px;margin-top:6px">🤖 '+t.aiScore+'/'+t.aiMax+'</div><div class="score-label">điểm tự luận AI đề xuất ('+t.aiCount+' câu đã chấm)</div>';
+    if(!html) html = '<div class="score-num">✓</div><div class="score-label">Đã nộp bài — đề chưa có đáp án trắc nghiệm và chưa bật AI cho câu tự luận nào</div>';
+    if(t.hasKey || t.aiCount) html += '<div class="score-label" style="margin-top:8px;font-size:15px"><b>TỔNG CỘNG: '+t.total+' điểm</b> (trắc nghiệm + tự luận AI đề xuất)</div>';
+    html += bd.aiConfigured
+      ? '<div class="score-label">Điểm tự luận là điểm AI đề xuất — giảng viên sẽ duyệt lại.</div>'
+      : '<div class="score-label" style="color:#E65100">⚠ Máy chủ chưa bật AI (thiếu AI_API_KEY) — câu tự luận chờ giảng viên chấm.</div>';
+    sc.innerHTML = html;
+    Object.keys(bd.essays || {}).forEach(qi=>{
+      const v = document.querySelector('[data-aiv="'+qi+'"]'); if(!v) return;
+      const e = bd.essays[qi];
+      if(e.status === 'ok'){ v.className = 'verdict ai'; v.innerHTML = '<span class="ai-badge">🤖 '+e.score+'/'+e.max+'</span> '+(e.comment ? escapeHtml(e.comment) : ''); }
+      else if(e.status === 'blank'){ v.className = 'verdict blank'; v.textContent = '⬜ Bạn không làm câu này — AI không chấm.'; }
+      else if(e.status === 'off'){ v.className = 'verdict'; v.style.color = 'var(--ink-soft)'; v.textContent = 'Câu này giảng viên chưa bật chấm AI — chờ chấm thủ công.'; }
+      else if(e.status === 'noai'){ v.className = 'verdict blank'; v.textContent = '⚠ Máy chủ chưa cấu hình AI — câu tự luận chờ giảng viên chấm.'; }
+      else { v.className = 'verdict bad'; v.textContent = '⚠ AI chấm hỏng câu này ('+(e.error || 'lỗi')+') — giảng viên sẽ chấm.'; }
+    });
+  }
+  // Công cụ xem lại: dựng từ bài nộp đã lưu (att.mc + att.essays + att.ai) + dữ liệu đề
+  function openReview(ex, att, back){
+    reviewBack = back || 'list';
+    let d = {questions: []}; try{ d = JSON.parse(ex.data) || d; }catch(e){}
+    const qs = d.questions || [], key = d.answerKey || {};
+    let es = {}; try{ es = JSON.parse(att.essays || '{}'); }catch(e){}
+    const mcA = att.mc || {}, ai = att.ai || {};
+    const head = $('reviewHead'); head.innerHTML = '';
+    head.appendChild(el('div','start-hero','🔍'));
+    head.appendChild(el('h1','', 'Xem lại: '+ex.title));
+    head.appendChild(el('p','muted',(att.name || '')+' · '+(att.sid || '')+' · nộp lúc '+fmt(att.at || Date.now())));
+    const sum = el('div','rev-sum');
+    if(att.score != null) sum.appendChild(el('span','','✅ Trắc nghiệm: '+att.score+'/'+att.total));
+    const aiK = Object.keys(ai);
+    let aiS = 0, aiM = 0;
+    aiK.forEach(k=>{ aiS += (+ai[k].score || 0); aiM += (+ai[k].max || 0); });
+    if(aiK.length) sum.appendChild(el('span','','🤖 Tự luận (AI đề xuất): '+(Math.round(aiS*100)/100)+'/'+(Math.round(aiM*100)/100)));
+    if(att.score != null && aiK.length) sum.appendChild(el('span','','🏅 Tổng: '+(Math.round((+att.score + aiS)*100)/100)));
+    if(sum.childNodes.length) head.appendChild(sum);
+    $('reviewLegend').innerHTML = '<span><i style="background:#2E7D32"></i>Đúng / đáp án đúng</span><span><i style="background:#C62828"></i>Bạn chọn sai</span><span><i style="background:#FF9800"></i>Câu bạn KHÔNG làm — đáp án hiện màu cam</span><span><i style="background:#7B2FD6"></i>Điểm AI tự luận</span>';
+    const box = $('reviewList'); box.innerHTML = '';
+    qs.forEach((q,qi)=>{
+      const item = el('div','qcard');
+      const hd = el('div','qhead');
+      hd.append(el('span','qnum','Câu '+q.num), el('span','qtype', q.type === 'mc' ? '✅ Trắc nghiệm' : '📝 Tự luận'));
+      item.appendChild(hd);
+      const st = el('div','qstem'); st.innerHTML = rich(q.stem); item.appendChild(st);
+      if(q.type === 'mc'){
+        const given = mcA[q.num] != null ? String(mcA[q.num]) : null;
+        const cl = key[q.num] != null ? String(key[q.num]) : null;
+        (q.order || Object.keys(q.options || {})).forEach(letter=>{
+          const row = el('div','opt');
+          if(cl && letter === cl) row.classList.add(given ? 'correct' : 'blankok');
+          if(given && letter === given && given !== cl) row.classList.add('wrong');
+          row.innerHTML = '<span class="opt-letter">'+letter+'.</span><span>'+rich(q.options[letter])+(letter === given ? '  ← bạn chọn' : '')+(letter === cl && cl ? '  ← đáp án đúng' : '')+'</span>';
+          item.appendChild(row);
+        });
+        const v = el('div','verdict');
+        if(!cl){ v.style.color = 'var(--ink-soft)'; v.textContent = given ? 'Bạn chọn '+given+' — đề chưa có đáp án cho câu này.' : 'Bạn không làm câu này — đề chưa có đáp án.'; }
+        else if(given == null){ v.className = 'verdict blank'; v.textContent = '⬜ Bạn KHÔNG làm câu này — đáp án đúng là '+cl+' (hiện màu cam).'; }
+        else if(given === cl){ v.className = 'verdict good'; v.textContent = '✅ Đúng — bạn chọn '+given+'.'; }
+        else { v.className = 'verdict bad'; v.textContent = '❌ Bạn chọn '+given+' — đáp án đúng là '+cl+'.'; }
+        item.appendChild(v);
+      } else {
+        const txt = typeof es[qi] === 'string' ? es[qi] : '';
+        if(txt.trim()){
+          const lb = el('div','qstem'); lb.style.marginTop = '10px'; lb.style.fontWeight = '700'; lb.textContent = '💬 Bài làm của bạn:';
+          const aw = el('div','qstem'); aw.style.whiteSpace = 'pre-wrap'; aw.style.color = 'var(--ink-soft)'; aw.textContent = txt;
+          item.append(lb, aw);
+          const aiv = ai[qi], v = el('div','verdict');
+          if(aiv){ v.className = 'verdict ai'; v.innerHTML = '<span class="ai-badge">🤖 '+aiv.score+'/'+(aiv.max || '?')+'</span> '+(aiv.comment ? escapeHtml(aiv.comment) : 'Điểm AI đề xuất.'); }
+          else { v.style.color = 'var(--ink-soft)'; v.textContent = 'Chờ giảng viên chấm.'; }
+          item.appendChild(v);
+        } else {
+          item.appendChild(el('div','rev-empty','⬜ Bạn KHÔNG làm câu này — không có bài làm để xem, và AI không chấm.'));
+        }
+      }
+      box.appendChild(item);
+    });
+    show('review');
   }
   async function publishExam(){
     const btn = $('btnPublish'); btn.disabled = true; btn.textContent = 'Đang xuất bản…';
