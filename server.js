@@ -35,8 +35,17 @@ const AI_TEMPERATURE = isFinite(+process.env.AI_TEMPERATURE) ? +process.env.AI_T
 // Giới hạn độ dài (ký tự) để kiểm soát chi phí và tránh lạm dụng
 const AI_MAX = { question: 6000, answer: 12000, rubric: 4000, sample: 6000, comment: 800 };
 
-// Render không gắn Disk + chưa đặt DATA_DIR → dữ liệu nằm ở thư mục tạm, MẤT khi deploy lại
-const STORAGE_WARN = !!process.env.RENDER && !process.env.DATA_DIR;
+// Trên Render, dữ liệu chỉ sống qua các lần deploy nếu DATA_DIR nằm trên một Disk thật (một mount point).
+// Thiếu Disk → mọi thứ mất khi deploy lại → cảnh báo giảng viên ngay trên dashboard.
+function storageIsPersistent() {
+  if (!process.env.RENDER) return true; // không chạy trên Render: tự quản lý
+  try {
+    const mounts = fs.readFileSync('/proc/mounts', 'utf8').split('\n').map(l => (l.split(/\s+/)[1] || '')).filter(Boolean);
+    const dir = path.resolve(DATA_DIR);
+    return mounts.some(m => m !== '/' && (dir === m || dir.startsWith(m.endsWith('/') ? m : m + '/')));
+  } catch (e) { return !!process.env.DATA_DIR; }
+}
+const STORAGE_WARN = !storageIsPersistent();
 const UP_DIR = path.join(DATA_DIR, 'uploads'), DB_FILE = path.join(DATA_DIR, 'db.json');
 fs.mkdirSync(UP_DIR, { recursive: true });
 let db = { exams: {}, results: {} };
