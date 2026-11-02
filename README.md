@@ -16,6 +16,10 @@ Cần một nơi chạy Node có **ổ đĩa lưu bền** (để không mất đ
   đặt biến `ADMIN_PASSWORD`, gắn Disk/Volume và đặt `DATA_DIR` trỏ tới đường dẫn của disk đó.
   **Bắt buộc gắn Disk trên Render**: nếu thiếu, ứng dụng tự hiện cảnh báo cam ở trang quản lý của giảng viên
   (`/api/me` trả `storageWarning: true`) vì dữ liệu sẽ mất mỗi lần deploy lại.
+  Cơ chế phát hiện gồm hai lớp: (1) kiểm tra `DATA_DIR` có nằm trên mount point thật (Disk) không khi chạy trên
+  Render; (2) "canary" `.canary.json` ghi số lượng đề/kết quả mỗi lần lưu — nếu lần khởi động sau thấy canary
+  có dữ liệu mà db trống thì kết luận dữ liệu đã bị xóa và cảnh báo kèm số liệu cụ thể.
+  `/healthz` trả thêm `uptime` và `build` (mã commit Render đang chạy) để dễ xác minh phiên bản đang deploy.
 - **VPS**: chạy `node server.js` bằng pm2 hoặc systemd, đặt Nginx/Caddy phía trước để có HTTPS.
 - Tên miền riêng: trỏ DNS về dịch vụ ở trên, bật HTTPS.
 

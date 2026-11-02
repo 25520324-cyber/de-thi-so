@@ -35,17 +35,6 @@ const AI_TEMPERATURE = isFinite(+process.env.AI_TEMPERATURE) ? +process.env.AI_T
 // Giới hạn độ dài (ký tự) để kiểm soát chi phí và tránh lạm dụng
 const AI_MAX = { question: 6000, answer: 12000, rubric: 4000, sample: 6000, comment: 800 };
 
-// Trên Render, dữ liệu chỉ sống qua các lần deploy nếu DATA_DIR nằm trên một Disk thật (một mount point).
-// Thiếu Disk → mọi thứ mất khi deploy lại → cảnh báo giảng viên ngay trên dashboard.
-function storageIsPersistent() {
-  if (!process.env.RENDER) return true; // không chạy trên Render: tự quản lý
-  try {
-    const mounts = fs.readFileSync('/proc/mounts', 'utf8').split('\n').map(l => (l.split(/\s+/)[1] || '')).filter(Boolean);
-    const dir = path.resolve(DATA_DIR);
-    return mounts.some(m => m !== '/' && (dir === m || dir.startsWith(m.endsWith('/') ? m : m + '/')));
-  } catch (e) { return !!process.env.DATA_DIR; }
-}
-const STORAGE_WARN = !storageIsPersistent();
 const UP_DIR = path.join(DATA_DIR, 'uploads'), DB_FILE = path.join(DATA_DIR, 'db.json');
 fs.mkdirSync(UP_DIR, { recursive: true });
 let db = { exams: {}, results: {} };
@@ -57,11 +46,38 @@ function save() {
     if (!dirty) { saving = false; return; }
     dirty = false;
     fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db), err => {
-      if (err) console.error(err); else fs.renameSync(DB_FILE + '.tmp', DB_FILE);
+      if (err) console.error(err); else { fs.renameSync(DB_FILE + '.tmp', DB_FILE); writeCanary(); }
       loop();
     });
   })();
 }
+
+// ---------- Phát hiện tầng lưu trữ tạm (dữ liệu mất khi deploy/khởi động lại) ----------
+// (1) Dự đoán: trên Render, DATA_DIR phải nằm trên một mount point thật (Disk) thì mới bền.
+// (2) Bằng chứng thực nghiệm "canary": mỗi lần lưu sẽ ghi số lượng đề/kết quả vào .canary.json;
+//     nếu lúc khởi động mà canary nói lần chạy trước CÓ dữ liệu nhưng giờ db rỗng → dữ liệu đã bị xóa.
+const ON_RENDER = !!(process.env.RENDER || process.env.RENDER_SERVICE_ID || process.env.RENDER_SERVICE_NAME);
+function mountCoversDataDir() {
+  try {
+    const mounts = fs.readFileSync('/proc/mounts', 'utf8').split('\n').map(l => (l.split(/\s+/)[1] || '')).filter(Boolean);
+    const dir = path.resolve(DATA_DIR);
+    return mounts.some(m => m !== '/' && (dir === m || dir.startsWith(m.endsWith('/') ? m : m + '/')));
+  } catch (e) { return false; }
+}
+const CANARY_FILE = path.join(DATA_DIR, '.canary.json');
+let canaryPrev = null;
+try { canaryPrev = JSON.parse(fs.readFileSync(CANARY_FILE, 'utf8')); } catch (e) {}
+const dbCounts = () => ({ exams: Object.keys(db.exams || {}).length, results: Object.keys(db.results || {}).length });
+const wiped = !!(canaryPrev && (canaryPrev.exams > 0 || canaryPrev.results > 0) && dbCounts().exams === 0 && dbCounts().results === 0);
+const noDisk = ON_RENDER && !mountCoversDataDir();
+const STORAGE_WARN = wiped || noDisk;
+const STORAGE_NOTE = wiped
+  ? 'DỮ LIỆU ĐÃ BỊ MẤT GIỮA HAI LẦN KHỞI ĐỘNG: lần chạy trước có ' + canaryPrev.exams + ' đề / ' + canaryPrev.results + ' file kết quả, giờ trống trơn — tầng lưu trữ hiện tại là tạm thời. Gắn Disk + đặt DATA_DIR ngay (xem hướng dẫn).'
+  : (noDisk ? 'Chạy trên Render nhưng DATA_DIR không nằm trên Disk nào — mọi đề thi và bài nộp sẽ MẤT mỗi lần deploy lại.' : '');
+function writeCanary() {
+  try { fs.writeFileSync(CANARY_FILE, JSON.stringify(Object.assign({ at: Date.now() }, dbCounts()))); } catch (e) {}
+}
+writeCanary();
 
 const sign = s => crypto.createHmac('sha256', SECRET).update(s).digest('hex');
 function makeToken() { const exp = Date.now() + 12 * 3600e3; return exp + '.' + sign('admin:' + exp); }
@@ -192,7 +208,7 @@ const server = http.createServer(async (req, res) => {
       failed[ip] = { n: f.n + 1, t: Date.now() };
       return send(res, 401, { error: 'Sai mật khẩu' });
     }
-    if (p === '/api/me') return send(res, 200, { admin: isAdmin(req), storageWarning: STORAGE_WARN });
+    if (p === '/api/me') return send(res, 200, { admin: isAdmin(req), storageWarning: STORAGE_WARN, storageNote: STORAGE_NOTE || null });
 
     if (p === '/api/upload' && m === 'POST') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
@@ -412,7 +428,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
       return fs.createReadStream(path.join(__dirname, 'public', 'index.html')).pipe(res);
     }
-    if (p === '/healthz') return send(res, 200, { ok: 1 });
+    if (p === '/healthz') return send(res, 200, { ok: 1, uptime: Math.round(process.uptime()), build: process.env.RENDER_GIT_COMMIT || 'dev' });
     send(res, 404, { error: 'not found' });
   } catch (e) {
     if (e && e.code === 413) return send(res, 413, { error: 'Dữ liệu quá lớn' });
