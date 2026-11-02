@@ -1061,7 +1061,9 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     panel.appendChild(el('p','muted','Mọi bài nộp được chấm TOÀN BỘ tự động NGAY khi sinh viên nộp (trắc nghiệm theo đáp án, tự luận do AI chấm từng câu). Bảng này để giảng viên XEM/CHỈNH cấu hình: thời gian, đáp án trắc nghiệm, tiêu chí tự luận — không cần bấm chấm.'));
     const pingRow = el('div','ai-row'); pingRow.style.marginTop = '8px';
     const bPing = el('button','ai-btn','🩺 Kiểm tra kết nối AI');
-    const pingNote = el('span','ai-note','Bấm để gọi thử mô hình AI — báo lỗi chính xác nếu key/model/URL sai.');
+    const pingNote = el('span','ai-note', aiStatus.enabled
+      ? ('Đang dùng: '+aiStatus.urlHost+' · key '+aiStatus.keyHint+' · model '+aiStatus.model+'. Bấm 🩺 để gọi thử — báo lỗi chính xác nếu cấu hình sai.')
+      : 'Bấm để gọi thử mô hình AI — báo lỗi chính xác nếu key/model/URL sai.');
     bPing.addEventListener('click', async ()=>{
       bPing.disabled = true; pingNote.textContent = 'Đang gọi thử mô hình…';
       try{ const rr = await aiApi('ping', {}); pingNote.textContent = '✅ Kết nối AI OK — model: '+(rr.model || '?')+'.'; }
