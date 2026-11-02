@@ -40,22 +40,22 @@ Cần một nơi chạy Node có **ổ đĩa lưu bền** (để không mất đ
   còn ≤ 5 phút đồng hồ chuyển đỏ nhấp nháy.
 
 ## Chấm toàn bộ bài thi bằng AI (trắc nghiệm + tự luận)
-Mở panel **🤖 Chấm AI toàn bài** ở trang *Quản lý đề & xem kết quả*:
+Mọi bài nộp được **chấm tự động TOÀN BỘ ngay khi nộp** (xem mục dưới) — giảng viên **không cần bấm chấm**,
+chỉ xem kết quả. Panel **🤖 Cấu hình chấm AI** ở trang *Quản lý đề & xem kết quả* dành cho xem/chỉnh cấu hình:
 
 **Phần trắc nghiệm:**
-1. Bấm **✨ AI đề xuất đáp án trắc nghiệm** — AI đọc câu hỏi + phương án và đề xuất đáp án đúng
-   cho những câu chưa có đáp án.
-2. Giảng viên **duyệt từng câu trong bảng** (đổi được đáp án đề xuất bằng dropdown) trước khi bấm
-   **💾 Lưu cấu hình** để ghi vào đáp án chính thức của đề.
-3. Khi chấm toàn bộ, hệ thống **tính lại điểm trắc nghiệm cho mọi bài nộp** từ các lựa chọn đã lưu.
+- Đề đã có đáp án (từ file/nhập sẵn) thì chấm theo đáp án đó.
+- Đề thiếu đáp án: AI **tự xác định đáp án ở lượt nộp đầu tiên** (lưu vào trường mới `autoKey`, gắn nhãn 🤖)
+  để chấm trắc nghiệm ngay; giảng viên **duyệt/chỉnh từng câu trong bảng** (dropdown) rồi bấm
+  **💾 Lưu cấu hình** để duyệt chính thức (chuyển vào `answerKey`).
+- Nút **✨ AI đề xuất đáp án trắc nghiệm** giúp gợi ý đáp án trước giờ thi (tùy chọn).
 
 **Phần tự luận:**
-1. Bật chấm AI cho từng câu, đặt điểm tối đa; nếu không có đáp án mẫu, bấm **✨ AI đề xuất tiêu chí** —
-   AI soạn tiêu chí chấm (rubric) từ câu hỏi. Giảng viên **xem và chỉnh sửa tiêu chí** trước khi chấm.
-2. Bấm **▶ Chấm AI toàn bộ bài thi** — AI chấm từng bài tự luận, trả về **điểm đề xuất + nhận xét ngắn**
-   (bỏ qua câu chưa trả lời), đồng thời tính điểm trắc nghiệm theo đáp án đã duyệt.
-3. Bảng kết quả có cột **Tổng** (TN + TL); điểm AI mang huy hiệu 🤖 để phân biệt rõ với điểm chính thức.
-   Giảng viên kiểm tra và nhập **Điểm chính thức** cho từng câu — điểm chính thức luôn được ưu tiên.
+- AI chấm **mọi** câu tự luận đã trả lời (không cần “bật” từng câu); điểm tối đa mặc định 10.
+- Trong panel có thể đặt **điểm tối đa**, bấm **✨ AI đề xuất tiêu chí** hoặc tự viết tiêu chí + đáp án mẫu —
+  chấm tự động sẽ bám theo đó (tùy chọn nhưng nên làm để chấm sát hơn).
+- Bảng kết quả có cột **Tổng** (TN + TL); điểm AI mang huy hiệu 🤖; giảng viên phúc khảo bằng cách nhập
+  **Điểm chính thức** cho từng câu — điểm chính thức luôn được ưu tiên.
 
 Toàn bộ lời gọi AI đi qua máy chủ (`/api/ai/rubric`, `/api/ai/grade`, `/api/ai/mc-key` — chỉ giảng viên
 đã đăng nhập mới gọi được; riêng `/api/ai/auto-grade` dành cho luồng nộp bài của sinh viên, chỉ chấm
@@ -63,8 +63,11 @@ Toàn bộ lời gọi AI đi qua máy chủ (`/api/ai/rubric`, `/api/ai/grade`,
 
 ## Chấm tự động ngay khi nộp bài + xem lại bài làm
 - Sinh viên bấm **Nộp bài** → trình duyệt gọi `POST /api/ai/auto-grade`: máy chủ đọc bài nộp đã lưu và
-  **chấm ngay từng câu** — trắc nghiệm theo đáp án đã duyệt, AI chấm từng câu tự luận **đã trả lời**
-  (câu bỏ trống không chấm), song song tối đa 3 câu một lượt.
+  **chấm TOÀN BỘ bài ngay lập tức** — trắc nghiệm theo đáp án của đề (nếu đề thiếu đáp án thì AI tự xác định
+  và lưu vào `autoKey`), AI chấm **mọi** câu tự luận **đã trả lời** (không cần bật cấu hình; câu bỏ trống
+  không chấm), song song tối đa 3 câu một lượt.
+- Giảng viên **không phải bấm chấm gì cả**: điểm (TN, TL do AI, tổng) tự xuất hiện ở bảng kết quả và trên
+  màn hình sinh viên ngay khi nộp; panel 🤖 chỉ để cấu hình thời gian/đáp án/tiêu chí và duyệt đáp án AI.
 - Màn hình kết quả hiện **điểm từng phần + TỔNG CỘNG** và nhận xét AI của từng câu tự luận; câu sinh viên
   **không làm** được đánh dấu riêng, đáp án đúng hiện **màu cam** để phân biệt.
 - Điểm AI chấm tự động được lưu vào `att.ai` (`src: "auto"`) dưới dạng **điểm đề xuất** — giảng viên vẫn
