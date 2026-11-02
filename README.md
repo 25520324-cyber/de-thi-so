@@ -14,6 +14,8 @@ Cần một nơi chạy Node có **ổ đĩa lưu bền** (để không mất đ
 
 - **Render / Railway / Fly.io**: tạo Web Service từ thư mục này (hoặc dùng Dockerfile kèm), Start command `node server.js`,
   đặt biến `ADMIN_PASSWORD`, gắn Disk/Volume và đặt `DATA_DIR` trỏ tới đường dẫn của disk đó.
+  **Bắt buộc gắn Disk trên Render**: nếu thiếu, ứng dụng tự hiện cảnh báo cam ở trang quản lý của giảng viên
+  (`/api/me` trả `storageWarning: true`) vì dữ liệu sẽ mất mỗi lần deploy lại.
 - **VPS**: chạy `node server.js` bằng pm2 hoặc systemd, đặt Nginx/Caddy phía trước để có HTTPS.
 - Tên miền riêng: trỏ DNS về dịch vụ ở trên, bật HTTPS.
 
@@ -25,8 +27,8 @@ Cần một nơi chạy Node có **ổ đĩa lưu bền** (để không mất đ
 | `DATA_DIR` | Nơi lưu dữ liệu (`db.json`, `uploads/`), mặc định `./data` |
 | `SECRET` | Khóa ký phiên đăng nhập (không bắt buộc) |
 | `AI_API_KEY` | Khóa API AI để chấm bài — trắc nghiệm + tự luận (không bắt buộc — thiếu thì các chức năng khác vẫn chạy bình thường; có thể dùng tên `OPENAI_API_KEY` thay thế) |
-| `AI_API_URL` | Endpoint chat completions kiểu OpenAI, mặc định `https://api.openai.com/v1/chat/completions` |
-| `AI_MODEL` | Tên model AI, mặc định `gpt-4o-mini` |
+| `AI_API_URL` | Endpoint chat completions kiểu OpenAI — **không đặt cũng được**: máy chủ tự nhận diện theo định dạng key (`AIza…` → Gemini, `gsk_…` → Groq, `sk-or-…` → OpenRouter, khác → OpenAI) |
+| `AI_MODEL` | Tên model AI — không đặt thì tự chọn theo nhà cung cấp nhận diện được (`gemini-2.0-flash`, `llama-3.3-70b-versatile`…); đặt tay luôn được ưu tiên |
 | `AI_TIMEOUT_MS` | Thời gian chờ mỗi lời gọi AI (ms), mặc định 45000 |
 | `AI_TEMPERATURE` | Độ ngẫu nhiên của AI, mặc định 0.2 (nên để thấp cho việc chấm điểm) |
 

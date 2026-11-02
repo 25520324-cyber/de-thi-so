@@ -471,7 +471,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   // Nút đăng nhập / đăng xuất giảng viên
   var btn = document.getElementById('btnLogin');
   window.__dtsReady = (async function(){
-    if(token){ try{ admin = (await api('GET', '/api/me')).admin; if(!admin){ token = null; localStorage.removeItem(TK); } }catch(e){ admin = false; } }
+    if(token){ try{ const me = await api('GET', '/api/me'); admin = me.admin; window.__dtsStorageWarn = !!me.storageWarning; if(!admin){ token = null; localStorage.removeItem(TK); } }catch(e){ admin = false; } }
     btn.textContent = admin ? 'Đăng xuất' : 'Giảng viên đăng nhập';
   })();
   btn.addEventListener('click', async function(){
@@ -1462,6 +1462,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   }
   function renderDash(){
     const box = $('dashList'); box.innerHTML = '';
+    if(window.__dtsStorageWarn) box.appendChild(el('div','rev-empty','⚠ CHƯA GẮN Ổ ĐĨA LƯU DỮ LIỆU TRÊN RENDER: mọi đề thi và bài nộp sẽ MẤT mỗi khi deploy lại. Khắc phục: Render → Disks → Add Disk (mount path /data) → Environment thêm DATA_DIR=/data → Save (xem README).'));
     if(!examsCache.length) box.appendChild(el('p','muted','Chưa có đề nào được xuất bản.'));
     examsCache.forEach(ex=>{
       const rows = []; resultsCache.forEach(r=>{ const a = (r.attempts || {})[ex.id]; if(a) rows.push({uid: r.uid, a}); });
