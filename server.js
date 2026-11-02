@@ -189,6 +189,18 @@ const server = http.createServer(async (req, res) => {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
       return send(res, 200, { enabled: !!AI_API_KEY, model: AI_API_KEY ? AI_MODEL : null });
     }
+    if (p === '/api/ai/ping' && m === 'POST') {
+      if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
+      try {
+        const content = await aiChat([
+          { role: 'system', content: 'Bạn là trợ lý kiểm tra kết nối. CHỈ trả về một đối tượng JSON hợp lệ duy nhất {"ok": true} — không thêm gì khác, không dùng dấu ```.' },
+          { role: 'user', content: 'Kiểm tra kết nối: hãy trả lời đúng định dạng được yêu cầu.' }
+        ]);
+        const o = parseAiJson(content);
+        if (!o || o.ok !== true) throw new AiError(502, 'AI trả lời không đúng định dạng kiểm tra: ' + String(content).slice(0, 200));
+        return send(res, 200, { ok: true, model: AI_MODEL });
+      } catch (e) { return aiFail(res, e); }
+    }
     if (p === '/api/ai/rubric' && m === 'POST') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
       const j = JSON.parse((await body(req, 256e3)).toString() || '{}');
@@ -261,7 +273,7 @@ const server = http.createServer(async (req, res) => {
       const aiOn = !!AI_API_KEY;
       // Câu trắc nghiệm CHƯA có đáp án (giảng viên lẫn AI) → AI tự xác định đáp án để chấm ngay,
       // lưu vào trường mới data.autoKey (giảng viên duyệt/chỉnh sau trong panel cấu hình)
-      let autoKeySaved = false;
+      let autoKeySaved = false, mcKeyError = '';
       const needQs = qs.filter(q => q.type === 'mc' && key[q.num] == null && autoKey[q.num] == null);
       if (needQs.length && aiOn) {
         const clean = needQs.slice(0, 20).map(q => {
@@ -274,7 +286,7 @@ const server = http.createServer(async (req, res) => {
             const pr = await proposeMcKey(clean);
             for (const n of Object.keys(pr.answers)) autoKey[n] = pr.answers[n];
             data.autoKey = autoKey; ex.data = JSON.stringify(data); save(); autoKeySaved = true;
-          } catch (e) { console.error('[AI] autoKey: ' + e.message); }
+          } catch (e) { console.error('[AI] autoKey: ' + e.message); mcKeyError = String(e.message || e).slice(0, 300); }
         }
       }
       const mc = {}; let mcScore = 0, mcTotal = 0, hasKey = false;
@@ -286,6 +298,11 @@ const server = http.createServer(async (req, res) => {
         if (correct) { hasKey = true; mcTotal++; if (given === correct) mcScore++; }
         mc[q.num] = { given, correct, ok: given != null && given === correct, answered: given != null, keySource: fromGv ? 'gv' : (fromAi ? 'ai' : null) };
       });
+      // Bài nộp cũ chưa có điểm TN (lúc nộp chưa có đáp án) nhưng giờ đã có đáp án → tính lại và lưu luôn
+      let scoreFixed = false;
+      if (hasKey && att.mc && Object.keys(att.mc).length && (att.score == null || att.total == null)) {
+        att.score = mcScore; att.total = mcTotal; scoreFixed = true;
+      }
       let es = {}; try { es = JSON.parse(att.essays || '{}'); } catch (e) {}
       const essays = {}, jobs = [], graded = {};
       qs.forEach((q, qi) => {
@@ -308,7 +325,7 @@ const server = http.createServer(async (req, res) => {
           }
         }));
       }
-      if (Object.keys(graded).length) {
+      if (Object.keys(graded).length || scoreFixed) {
         att.ai = att.ai || {};
         for (const k of Object.keys(graded)) att.ai[k] = { score: graded[k].score, comment: graded[k].comment, max: graded[k].maxScore, at: Date.now(), src: 'auto' };
         save();
@@ -319,7 +336,8 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         mc, essays,
         totals: { hasKey, mcScore, mcTotal, aiScore: r2(aiScore), aiMax: r2(aiMax), aiCount, total: r2((hasKey ? mcScore : 0) + aiScore) },
-        aiConfigured: aiOn, stored: Object.keys(graded).length > 0, autoKeySaved
+        aiConfigured: aiOn, stored: Object.keys(graded).length > 0, autoKeySaved,
+        mcKeyError: mcKeyError || null, scoreFixed
       });
     }
 
