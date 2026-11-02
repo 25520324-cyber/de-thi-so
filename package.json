@@ -1,0 +1,8 @@
+{
+  "name": "de-thi-so",
+  "version": "1.0.0",
+  "description": "Tạo bài thi từ file đề (Word/PDF/TXT), cho sinh viên làm bài và nộp kết quả",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
