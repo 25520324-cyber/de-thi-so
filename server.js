@@ -13,7 +13,9 @@ if (!ADMIN_PASSWORD) { console.error('Thiếu biến môi trường ADMIN_PASSWO
 
 // ---------- Cấu hình AI chấm tự luận (chỉ ở phía máy chủ — KHÔNG đưa key xuống trình duyệt) ----------
 // Dùng chung chuẩn OpenAI Chat Completions nên tương thích OpenAI, Gemini, Groq, OpenRouter… qua AI_API_URL.
-const AI_API_KEY = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '';
+// Dọn giá trị biến môi trường: bỏ khoảng trắng thừa và cặp nháy bao quanh (lỗi copy/paste phổ biến gây 401)
+const cleanEnv = s => { s = (s || '').trim(); if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) s = s.slice(1, -1).trim(); return s; };
+const AI_API_KEY = cleanEnv(process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '');
 // Tự nhận diện nhà cung cấp theo ĐỊNH DẠNG KEY khi chưa đặt AI_API_URL/AI_MODEL —
 // tránh lỗi cấu hình phổ biến (dán key Gemini/Groq/OpenRouter nhưng để nguyên URL mặc định của OpenAI)
 function detectAiCfg(key, explicitUrl, explicitModel) {
@@ -27,9 +29,11 @@ function detectAiCfg(key, explicitUrl, explicitModel) {
   if (!model) model = 'gpt-4o-mini';
   return { url, model };
 }
-const _aiCfg = detectAiCfg(AI_API_KEY, process.env.AI_API_URL || '', process.env.AI_MODEL || '');
+const _aiCfg = detectAiCfg(AI_API_KEY, cleanEnv(process.env.AI_API_URL), cleanEnv(process.env.AI_MODEL));
 const AI_API_URL = _aiCfg.url;
 const AI_MODEL = _aiCfg.model;
+const AI_URL_HOST = (() => { try { return new URL(AI_API_URL).host; } catch (e) { return AI_API_URL; } })();
+const AI_KEY_HINT = AI_API_KEY ? AI_API_KEY.slice(0, 4) + '…' : '';
 const AI_TIMEOUT_MS = Math.max(1000, Math.min(120000, +process.env.AI_TIMEOUT_MS || 45000));
 const AI_TEMPERATURE = isFinite(+process.env.AI_TEMPERATURE) ? +process.env.AI_TEMPERATURE : 0.2;
 // Giới hạn độ dài (ký tự) để kiểm soát chi phí và tránh lạm dụng
@@ -135,7 +139,7 @@ async function aiChat(messages) {
   if (!r.ok) {
     let m = '';
     try { const j = JSON.parse(txt); m = (j.error && (j.error.message || j.error)) || ''; } catch (e) {}
-    if (r.status === 401 || r.status === 403) m = 'API key AI không hợp lệ hoặc không có quyền truy cập model này.';
+    if (r.status === 401 || r.status === 403) m = 'API key AI không hợp lệ hoặc không có quyền truy cập model này (đã gọi ' + AI_URL_HOST + ' bằng key dạng ' + (AI_KEY_HINT || 'trống') + ', model ' + AI_MODEL + ' — kiểm tra lại AI_API_KEY/AI_MODEL trên Render, hoặc tạo key mới đúng nhà cung cấp).';
     else if (r.status === 429) m = 'Dịch vụ AI hết hạn mức hoặc quá tải (429) — thử lại sau.';
     console.error('[AI] provider error ' + r.status + ': ' + txt.slice(0, 500));
     throw new AiError(502, 'Dịch vụ AI báo lỗi ' + r.status + (m ? ': ' + String(m).slice(0, 300) : ''));
@@ -228,7 +232,7 @@ const server = http.createServer(async (req, res) => {
     // ---------- AI chấm tự luận: mọi endpoint đều yêu cầu quyền giảng viên ----------
     if (p === '/api/ai/status' && m === 'GET') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
-      return send(res, 200, { enabled: !!AI_API_KEY, model: AI_API_KEY ? AI_MODEL : null });
+      return send(res, 200, { enabled: !!AI_API_KEY, model: AI_API_KEY ? AI_MODEL : null, urlHost: AI_API_KEY ? AI_URL_HOST : null, keyHint: AI_KEY_HINT || null });
     }
     if (p === '/api/ai/ping' && m === 'POST') {
       if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
