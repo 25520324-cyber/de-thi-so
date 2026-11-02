@@ -74,6 +74,11 @@ Toàn bộ lời gọi AI đi qua máy chủ (`/api/ai/rubric`, `/api/ai/grade`,
   duyệt/chỉnh lại ở bảng kết quả như cũ.
 - Nút **🔍 Xem lại bài làm & đáp án** (ở màn hình kết quả và mục “📚 Bài bạn đã nộp” ở trang sinh viên)
   dựng lại toàn bộ bài: lựa chọn của bạn, đáp án đúng, bài viết tự luận + điểm AI; câu bỏ trống tô cam.
+- Nếu AI **không xác định được đáp án trắc nghiệm** (lỗi key/model/mạng), lỗi cụ thể hiện ngay trên màn hình
+  kết quả của sinh viên (`mcKeyError`) để giảng viên biết và xử lý; nút **🩺 Kiểm tra kết nối AI** trong panel
+  🤖 (endpoint `POST /api/ai/ping`, chỉ giảng viên) gọi thử mô hình và báo lỗi chính xác.
+- Khi đáp án xuất hiện muộn (AI xác định lại được hoặc giảng viên mới nhập), điểm trắc nghiệm của **bài nộp cũ**
+  được tính lại tự động: trên máy chủ khi chấm lượt mới, và hiển thị ngay ở bảng kết quả + trang Xem lại.
 - Chống lạm dụng: chấm tự động giới hạn ~12 yêu cầu / 10 phút cho mỗi IP (vượt → 429).
 - Nếu máy chủ thiếu `AI_API_KEY`: trắc nghiệm vẫn chấm bình thường, câu tự luận báo “chưa cấu hình AI”
   và chờ giảng viên chấm — không hỏng luồng nộp bài.
