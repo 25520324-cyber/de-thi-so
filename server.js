@@ -138,6 +138,23 @@ async function gradeEssayAi(questionText, maxScore, rubricText, sampleText, answ
   return { score, comment, maxScore, truncated: q.truncated || a.truncated || rb.truncated || s.truncated };
 }
 
+// AI đề xuất đáp án trắc nghiệm cho danh sách câu đã làm sạch — dùng chung cho /api/ai/mc-key và chấm tự động
+async function proposeMcKey(clean) {
+  const content = await aiChat([
+    { role: 'system', content: 'Bạn là chuyên gia giải đề thi trắc nghiệm. Với mỗi câu hỏi, chọn MỘT chữ cái là đáp án đúng nhất. CHỈ trả về một đối tượng JSON hợp lệ duy nhất dạng {"answers": {"<số câu>": "<chữ cái>"}} — đủ mọi câu được hỏi, không giải thích, không dùng dấu ```.' },
+    { role: 'user', content: clean.map(q => 'Câu ' + q.num + ':\n' + q.stem + '\n' + Object.keys(q.options).map(L => L + '. ' + q.options[L]).join('\n')).join('\n\n') }
+  ]);
+  const o = parseAiJson(content);
+  const got = o && o.answers && typeof o.answers === 'object' ? o.answers : null;
+  if (!got) throw new AiError(502, 'AI không trả về đáp án hợp lệ — hãy thử lại.');
+  const answers = {}, missing = [];
+  for (const q of clean) {
+    const L = String(got[q.num] == null ? '' : got[q.num]).trim().toUpperCase().charAt(0);
+    if (Object.prototype.hasOwnProperty.call(q.options, L)) answers[q.num] = L; else missing.push(q.num);
+  }
+  return { answers, missing };
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x'), p = url.pathname, m = req.method;
@@ -218,19 +235,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (!clean.length) return send(res, 400, { error: 'Không có câu trắc nghiệm hợp lệ để AI đề xuất đáp án.' });
       try {
-        const content = await aiChat([
-          { role: 'system', content: 'Bạn là chuyên gia giải đề thi trắc nghiệm. Với mỗi câu hỏi, chọn MỘT chữ cái là đáp án đúng nhất. CHỈ trả về một đối tượng JSON hợp lệ duy nhất dạng {"answers": {"<số câu>": "<chữ cái>"}} — đủ mọi câu được hỏi, không giải thích, không dùng dấu ```.' },
-          { role: 'user', content: clean.map(q => 'Câu ' + q.num + ':\n' + q.stem + '\n' + Object.keys(q.options).map(L => L + '. ' + q.options[L]).join('\n')).join('\n\n') }
-        ]);
-        const o = parseAiJson(content);
-        const got = o && o.answers && typeof o.answers === 'object' ? o.answers : null;
-        if (!got) throw new AiError(502, 'AI không trả về đáp án hợp lệ — hãy thử lại.');
-        const answers = {}, missing = [];
-        for (const q of clean) {
-          const L = String(got[q.num] == null ? '' : got[q.num]).trim().toUpperCase().charAt(0);
-          if (Object.prototype.hasOwnProperty.call(q.options, L)) answers[q.num] = L; else missing.push(q.num);
-        }
-        return send(res, 200, { answers, missing });
+        return send(res, 200, await proposeMcKey(clean));
       } catch (e) { return aiFail(res, e); }
     }
 
@@ -252,25 +257,43 @@ const server = http.createServer(async (req, res) => {
       const att = rdoc && (rdoc.attempts || {})[examId];
       if (!att) return send(res, 400, { error: 'Chưa có bài nộp nào để chấm — hãy nộp bài trước.' });
       let data = { questions: [] }; try { data = JSON.parse(ex.data) || data; } catch (e) {}
-      const qs = data.questions || [], key = data.answerKey || {};
+      const qs = data.questions || [], key = data.answerKey || {}, autoKey = data.autoKey || {};
+      const aiOn = !!AI_API_KEY;
+      // Câu trắc nghiệm CHƯA có đáp án (giảng viên lẫn AI) → AI tự xác định đáp án để chấm ngay,
+      // lưu vào trường mới data.autoKey (giảng viên duyệt/chỉnh sau trong panel cấu hình)
+      let autoKeySaved = false;
+      const needQs = qs.filter(q => q.type === 'mc' && key[q.num] == null && autoKey[q.num] == null);
+      if (needQs.length && aiOn) {
+        const clean = needQs.slice(0, 20).map(q => {
+          const opts = {};
+          if (q.options && typeof q.options === 'object') for (const L of Object.keys(q.options)) if (/^[A-F]$/.test(L)) opts[L] = clip(q.options[L], 500).text;
+          return { num: String(q.num == null ? '' : q.num).trim().slice(0, 10), stem: String(q.stem || '').replace(/\[\[IMG:\d+\]\]/g, ' ').replace(/<[^>]*>/g, ' ').slice(0, 2000), options: opts };
+        }).filter(c => c.num && c.stem.trim() && Object.keys(c.options).length >= 2);
+        if (clean.length) {
+          try {
+            const pr = await proposeMcKey(clean);
+            for (const n of Object.keys(pr.answers)) autoKey[n] = pr.answers[n];
+            data.autoKey = autoKey; ex.data = JSON.stringify(data); save(); autoKeySaved = true;
+          } catch (e) { console.error('[AI] autoKey: ' + e.message); }
+        }
+      }
       const mc = {}; let mcScore = 0, mcTotal = 0, hasKey = false;
       qs.forEach(q => {
         if (q.type !== 'mc') return;
         const given = (att.mc || {})[q.num] != null ? String((att.mc || {})[q.num]) : null;
-        const correct = key[q.num] != null ? String(key[q.num]) : null;
+        const fromGv = key[q.num] != null, fromAi = !fromGv && autoKey[q.num] != null;
+        const correct = fromGv ? String(key[q.num]) : (fromAi ? String(autoKey[q.num]) : null);
         if (correct) { hasKey = true; mcTotal++; if (given === correct) mcScore++; }
-        mc[q.num] = { given, correct, ok: given != null && given === correct, answered: given != null };
+        mc[q.num] = { given, correct, ok: given != null && given === correct, answered: given != null, keySource: fromGv ? 'gv' : (fromAi ? 'ai' : null) };
       });
       let es = {}; try { es = JSON.parse(att.essays || '{}'); } catch (e) {}
-      const aiOn = !!AI_API_KEY;
       const essays = {}, jobs = [], graded = {};
       qs.forEach((q, qi) => {
         if (q.type !== 'essay') return;
         const txt = typeof es[qi] === 'string' ? es[qi] : '';
         if (!txt.trim()) { essays[qi] = { answered: false, status: 'blank' }; return; }
-        const cfg = q.ai && q.ai.enabled ? q.ai : null;
-        if (!cfg) { essays[qi] = { answered: true, status: 'off' }; return; }
         if (!aiOn) { essays[qi] = { answered: true, status: 'noai' }; return; }
+        const cfg = q.ai && typeof q.ai === 'object' ? q.ai : {}; // chấm MỌI câu tự luận đã trả lời — không cần "bật"
         essays[qi] = { answered: true, status: 'pending' };
         jobs.push({ qi, cfg, txt, stem: String(q.stem || '').replace(/\[\[IMG:\d+\]\]/g, ' ').replace(/<[^>]*>/g, ' ') });
       });
@@ -296,7 +319,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, {
         mc, essays,
         totals: { hasKey, mcScore, mcTotal, aiScore: r2(aiScore), aiMax: r2(aiMax), aiCount, total: r2((hasKey ? mcScore : 0) + aiScore) },
-        aiConfigured: aiOn, stored: Object.keys(graded).length > 0
+        aiConfigured: aiOn, stored: Object.keys(graded).length > 0, autoKeySaved
       });
     }
 
