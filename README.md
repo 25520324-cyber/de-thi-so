@@ -58,7 +58,22 @@ Mở panel **🤖 Chấm AI toàn bài** ở trang *Quản lý đề & xem kết
    Giảng viên kiểm tra và nhập **Điểm chính thức** cho từng câu — điểm chính thức luôn được ưu tiên.
 
 Toàn bộ lời gọi AI đi qua máy chủ (`/api/ai/rubric`, `/api/ai/grade`, `/api/ai/mc-key` — chỉ giảng viên
-đã đăng nhập mới gọi được). **API key không bao giờ được đưa xuống trình duyệt** và không nằm trong mã nguồn trên GitHub.
+đã đăng nhập mới gọi được; riêng `/api/ai/auto-grade` dành cho luồng nộp bài của sinh viên, chỉ chấm
+đúng bài nộp của chính uid gửi lên). **API key không bao giờ được đưa xuống trình duyệt** và không nằm trong mã nguồn trên GitHub.
+
+## Chấm tự động ngay khi nộp bài + xem lại bài làm
+- Sinh viên bấm **Nộp bài** → trình duyệt gọi `POST /api/ai/auto-grade`: máy chủ đọc bài nộp đã lưu và
+  **chấm ngay từng câu** — trắc nghiệm theo đáp án đã duyệt, AI chấm từng câu tự luận **đã trả lời**
+  (câu bỏ trống không chấm), song song tối đa 3 câu một lượt.
+- Màn hình kết quả hiện **điểm từng phần + TỔNG CỘNG** và nhận xét AI của từng câu tự luận; câu sinh viên
+  **không làm** được đánh dấu riêng, đáp án đúng hiện **màu cam** để phân biệt.
+- Điểm AI chấm tự động được lưu vào `att.ai` (`src: "auto"`) dưới dạng **điểm đề xuất** — giảng viên vẫn
+  duyệt/chỉnh lại ở bảng kết quả như cũ.
+- Nút **🔍 Xem lại bài làm & đáp án** (ở màn hình kết quả và mục “📚 Bài bạn đã nộp” ở trang sinh viên)
+  dựng lại toàn bộ bài: lựa chọn của bạn, đáp án đúng, bài viết tự luận + điểm AI; câu bỏ trống tô cam.
+- Chống lạm dụng: chấm tự động giới hạn ~12 yêu cầu / 10 phút cho mỗi IP (vượt → 429).
+- Nếu máy chủ thiếu `AI_API_KEY`: trắc nghiệm vẫn chấm bình thường, câu tự luận báo “chưa cấu hình AI”
+  và chờ giảng viên chấm — không hỏng luồng nộp bài.
 
 ### Cấu hình API key trên Render
 1. Mở [dashboard.render.com](https://dashboard.render.com) → chọn Web Service của ứng dụng này.
