@@ -136,6 +136,22 @@ button:disabled{opacity:.45; cursor:not-allowed;}
 .strip{display:none;gap:10px;flex-wrap:wrap;margin-top:14px;}
 .strip figure{margin:0;width:110px;font-size:11px;color:var(--ink-soft);text-align:center;}
 .strip img{max-width:100%;max-height:80px;border:1px solid var(--line);border-radius:6px;background:#fff;}
+/* ----- Chấm AI tự luận ----- */
+.ai-box{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--bg);}
+.ai-head{display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px;cursor:pointer;}
+.ai-head input{accent-color:var(--accent);flex:none;}
+.ai-body{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
+.ai-body label{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+.ai-body textarea{min-height:70px;font-size:13.5px;padding:10px;}
+.ai-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.ai-row input[type=number]{width:90px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;}
+.ai-btn{padding:7px 12px;font-size:12.5px;border-radius:8px;}
+.ai-note{font-size:12.5px;color:var(--ink-soft);}
+.ai-warn{font-size:12.5px;color:var(--bad);margin-top:6px;}
+.ai-sugg{display:inline-block;font-size:12px;font-weight:700;color:#7B2FD6;background:#F3E9FF;border:1px solid #DDC6FA;border-radius:14px;padding:2px 10px;margin-top:6px;}
+.ai-comment{font-size:12.5px;color:var(--ink-soft);margin-top:4px;white-space:pre-wrap;}
+.ai-progress{font-size:13px;color:var(--ink-soft);margin-top:10px;white-space:pre-wrap;}
+.man-score{width:110px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:13px;margin-top:6px;}
 .hidden{display:none !important;}
 footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20px 40px;}
 @media (max-width:480px){
@@ -240,7 +256,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   </section>
 
 </main>
-<footer>Trích xuất và chấm điểm diễn ra ngay trên trình duyệt — không gửi file lên máy chủ nào.</footer>
+<footer>Trích xuất file và chấm trắc nghiệm diễn ra ngay trên trình duyệt. Nếu bật chấm AI tự luận, bài làm của sinh viên được gửi qua máy chủ của trang này tới dịch vụ AI do giảng viên cấu hình (điểm AI chỉ là điểm đề xuất).</footer>
 
 <script>
 /* Adapter: cung cấp window.claude.use('user'|'db'|'assets') bằng API của server này. */
@@ -332,6 +348,9 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   let examData = null; // {title, intro, questions:[], answerKey:{}}
   let timerHandle = null, startTime = null;
   let mode = 'teacher', curExam = null, db = null, uid = null, isAdmin = false, examsCache = [], resultsCache = [], selExam = null, stu = {name:'', sid:''};
+  // Trạng thái chấm AI: aiStatus (máy chủ có cấu hình AI không), aiBoxes (panel cấu hình khi tạo đề),
+  // aiOpen (đề đang mở panel chấm AI trên dashboard), aiBusy (đang chấm), aiProg (tiến độ), aiDrafts (bản nháp cấu hình)
+  let aiStatus = {enabled:false, model:null}, aiBoxes = {}, aiOpen = null, aiBusy = false, aiProg = null, aiDrafts = {};
 
   // ---------- FILE EXTRACTION ----------
   const drop = $('drop'), fileInput = $('fileInput'), uploadStatus = $('uploadStatus');
@@ -606,6 +625,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
 
   // ---------- RENDER EXAM ----------
   function renderExam(data){
+    aiBoxes = {};
     const mcCount = data.questions.filter(q=>q.type==='mc').length;
     const essayCount = data.questions.length - mcCount;
     $('pillTotal').textContent = data.questions.length + ' câu';
@@ -646,6 +666,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         const ta = document.createElement('textarea');
         ta.className = 'essay-area'; ta.placeholder = 'Nhập câu trả lời…'; ta.dataset.num = qi;
         card.appendChild(ta);
+        // Giảng viên (đang tạo đề): hiện cấu hình chấm AI cho câu tự luận này
+        if(mode === 'teacher' && isAdmin){ aiBoxes[qi] = buildAiSetup(q, qi); card.appendChild(aiBoxes[qi]); }
       }
       list.appendChild(card);
     });
@@ -749,6 +771,186 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   $('btnDash').addEventListener('click', goDash);
   $('btnPublish').addEventListener('click', publishExam);
 
+  // ---------- CHẤM AI TỰ LUẬN (mọi lời gọi AI đều qua máy chủ — trình duyệt không giữ API key) ----------
+  async function aiApi(path, payload){
+    let tk = null; try{ tk = localStorage.getItem('dts_admin_token'); }catch(e){}
+    const r = await fetch('/api/ai/'+path, {
+      method: payload === undefined ? 'GET' : 'POST',
+      headers: Object.assign({'Content-Type':'application/json'}, tk ? {Authorization:'Bearer '+tk} : {}),
+      body: payload === undefined ? undefined : JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ const e = new Error(j.error || ('Lỗi AI ('+r.status+')')); e.code = r.status; throw e; }
+    return j;
+  }
+  // Bỏ mã hình [[IMG:n]] để gửi câu hỏi dạng chữ thuần cho AI
+  const plainStem = q => (q.stem || '').replace(/\[\[IMG:\d+\]\]/g,'[hình]').replace(/\s+/g,' ').trim();
+  const msOf = (v,d)=>{ const n = parseFloat(v); return isFinite(n) ? Math.min(100, Math.max(0.5, n)) : d; };
+
+  // Khối cấu hình AI cho 1 câu tự luận — dùng chung khi tạo đề và trong panel chấm AI trên dashboard.
+  // Giảng viên luôn xem/chỉnh được tiêu chí trước khi chấm; có thể nhờ AI đề xuất tiêu chí từ câu hỏi.
+  function buildAiSetup(q, qi, cfg, onDraft){
+    cfg = cfg || q.ai || {};
+    const box = el('div','ai-box');
+    const head = el('label','ai-head');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!cfg.enabled;
+    head.append(cb, el('span','','Bật chấm AI (điểm AI là điểm đề xuất — giảng viên duyệt lại)'));
+    box.appendChild(head);
+    if(!aiStatus.enabled) box.appendChild(el('div','ai-warn','⚠ Máy chủ chưa cấu hình AI (thiếu biến môi trường AI_API_KEY) — vẫn lưu được cấu hình nhưng chưa đề xuất tiêu chí/chấm được.'));
+    const bd = el('div','ai-body');
+    const r1 = el('div','ai-row');
+    const ms = document.createElement('input'); ms.type = 'number'; ms.min = '0.5'; ms.max = '100'; ms.step = '0.5';
+    ms.value = cfg.maxScore != null ? cfg.maxScore : 10;
+    r1.append(el('label','','Điểm tối đa:'), ms);
+    const bRub = el('button','ai-btn','✨ AI đề xuất tiêu chí'); bRub.type = 'button';
+    const note = el('span','ai-note','');
+    r1.append(bRub, note);
+    bd.appendChild(r1);
+    bd.appendChild(el('label','','Tiêu chí chấm (xem và chỉnh sửa trực tiếp trước khi lưu/chấm):'));
+    const rub = document.createElement('textarea'); rub.value = cfg.rubric || '';
+    rub.placeholder = 'Bấm "AI đề xuất tiêu chí" để AI soạn giúp từ câu hỏi, hoặc tự viết tiêu chí của bạn ở đây.';
+    bd.appendChild(rub);
+    bd.appendChild(el('label','','Đáp án mẫu (không bắt buộc — nếu bỏ trống, AI sẽ đề xuất tiêu chí dựa trên câu hỏi):'));
+    const sam = document.createElement('textarea'); sam.value = cfg.sampleAnswer || ''; sam.placeholder = '(Không bắt buộc)';
+    bd.appendChild(sam);
+    box.appendChild(bd);
+    const sync = ()=>{ bd.style.display = cb.checked ? '' : 'none'; };
+    cb.addEventListener('change', sync); sync();
+    bRub.addEventListener('click', async ()=>{
+      bRub.disabled = true; note.textContent = 'Đang tạo tiêu chí…';
+      try{
+        const r = await aiApi('rubric', {question: plainStem(q), maxScore: msOf(ms.value,10), sampleAnswer: sam.value});
+        rub.value = r.rubric;
+        note.textContent = 'Đã đề xuất tiêu chí — hãy kiểm tra/chỉnh sửa trước khi chấm.' + (r.truncated ? ' (Nội dung quá dài nên đã bị cắt bớt.)' : '');
+      }catch(e){ note.textContent = e.message || 'Không tạo được tiêu chí.'; }
+      bRub.disabled = false;
+    });
+    box._read = ()=> cb.checked
+      ? {enabled: true, maxScore: msOf(ms.value,10), rubric: rub.value.trim(), sampleAnswer: sam.value.trim()}
+      : {enabled: false};
+    if(onDraft){ const fire = ()=> onDraft(box._read()); [cb,ms,rub,sam].forEach(x=>{ x.addEventListener('input',fire); x.addEventListener('change',fire); }); }
+    return box;
+  }
+
+  function setProg(exId, text){
+    aiProg = {exId, text};
+    const pe = $('aiProg_'+exId); if(pe) pe.textContent = text;
+  }
+
+  // Panel chấm AI cho 1 đề trên dashboard: liệt kê câu tự luận, cho phép bật AI, sửa tiêu chí rồi chấm toàn bộ
+  function buildAiPanel(ex){
+    let qs = [];
+    try{ qs = (JSON.parse(ex.data).questions || []); }catch(e){}
+    const panel = el('div','ai-box'); panel.style.marginTop = '14px';
+    panel.appendChild(el('h2','','🤖 Chấm AI tự luận — “'+ex.title+'”'));
+    const drafts = aiDrafts[ex.id] = aiDrafts[ex.id] || {};
+    const setups = {};
+    qs.forEach((q,qi)=>{
+      if(q.type !== 'essay') return;
+      const wrap = el('div',''); wrap.style.marginTop = '14px';
+      wrap.appendChild(el('span','qnum','Câu '+q.num));
+      const ps = plainStem(q);
+      const st = el('div','qstem', ps.length > 200 ? ps.slice(0,200)+'…' : ps);
+      st.style.fontSize = '13px'; st.style.color = 'var(--ink-soft)'; st.style.marginTop = '2px';
+      wrap.appendChild(st);
+      const s = buildAiSetup(q, qi, drafts[qi] || q.ai || {}, v=>{ drafts[qi] = v; });
+      setups[qi] = s; wrap.appendChild(s);
+      panel.appendChild(wrap);
+    });
+    if(!Object.keys(setups).length){ panel.appendChild(el('p','muted','Đề này không có câu tự luận nào.')); return panel; }
+    const opt = el('label','ai-head'); opt.style.marginTop = '12px';
+    const force = document.createElement('input'); force.type = 'checkbox';
+    opt.append(force, el('span','','Chấm lại cả những câu đã có điểm AI'));
+    panel.appendChild(opt);
+    const btnRow = el('div','row'); btnRow.style.marginTop = '10px';
+    const bSave = el('button','ai-btn','💾 Lưu cấu hình');
+    const bRun = el('button','primary ai-btn','▶ Lưu & chấm AI toàn bộ bài nộp');
+    if(aiBusy){ bSave.disabled = true; bRun.disabled = true; }
+    bSave.addEventListener('click', ()=> saveAiCfg(ex, setups));
+    bRun.addEventListener('click', ()=> runAiGrading(ex, setups, qs, force.checked));
+    btnRow.append(bSave, bRun);
+    panel.appendChild(btnRow);
+    const prog = el('div','ai-progress',''); prog.id = 'aiProg_'+ex.id;
+    prog.textContent = (aiProg && aiProg.exId === ex.id) ? aiProg.text : '';
+    panel.appendChild(prog);
+    return panel;
+  }
+
+  // Ghi cấu hình AI (q.ai) vào tài liệu đề — chỉ thêm trường mới, không đổi cấu trúc cũ
+  async function saveAiCfg(ex, setups){
+    let dataObj;
+    try{ dataObj = JSON.parse(ex.data); }catch(e){ setProg(ex.id, 'Dữ liệu đề bị lỗi, không lưu được cấu hình AI.'); return false; }
+    (dataObj.questions || []).forEach((q,qi)=>{ if(q.type === 'essay' && setups[qi]) q.ai = setups[qi]._read(); });
+    const newData = JSON.stringify(dataObj);
+    try{
+      await db.doc('exams/'+ex.id).update({data: newData});
+      ex.data = newData; // cập nhật cache cục bộ ngay
+      setProg(ex.id, 'Đã lưu cấu hình chấm AI ✓');
+      return true;
+    }catch(e){ setProg(ex.id, 'Không lưu được cấu hình: '+(e.message || e)); return false; }
+  }
+
+  // Chấm AI lần lượt từng bài: bỏ qua câu chưa trả lời, lỗi 1 câu không dừng cả đợt
+  async function runAiGrading(ex, setups, qs, force){
+    if(aiBusy) return;
+    const cfgs = [];
+    qs.forEach((q,qi)=>{
+      if(q.type !== 'essay' || !setups[qi]) return;
+      const c = setups[qi]._read();
+      if(c.enabled) cfgs.push(Object.assign({qi, q}, c));
+    });
+    if(!cfgs.length){ setProg(ex.id, 'Chưa bật chấm AI cho câu nào — hãy bật checkbox ở từng câu rồi thử lại.'); return; }
+    aiBusy = true;
+    try{
+      if(!(await saveAiCfg(ex, setups))) return;
+      const targets = [];
+      resultsCache.forEach(doc=>{
+        const att = (doc.attempts || {})[ex.id]; if(!att) return;
+        let es = {}; try{ es = JSON.parse(att.essays || '{}'); }catch(e){}
+        cfgs.forEach(c=>{
+          const ans = (es[c.qi] || '').trim();
+          if(!ans) return; // sinh viên chưa trả lời → không chấm
+          const prev = att.ai && att.ai[c.qi];
+          if(!force && prev && typeof prev.score === 'number') return; // đã có điểm AI
+          targets.push({doc, att, c, ans});
+        });
+      });
+      if(!targets.length){ setProg(ex.id, 'Không có bài cần chấm: sinh viên chưa trả lời câu bật AI, hoặc tất cả đã có điểm AI (bật “Chấm lại…” nếu muốn chấm lại).'); return; }
+      let done = 0, okN = 0; const errs = [];
+      for(const t of targets){
+        done++;
+        setProg(ex.id, 'Đang chấm '+done+'/'+targets.length+'… (thành công '+okN+', lỗi '+errs.length+')');
+        try{
+          const r = await aiApi('grade', {question: plainStem(t.c.q), answer: t.ans, maxScore: t.c.maxScore, rubric: t.c.rubric, sampleAnswer: t.c.sampleAnswer});
+          // Đọc kết quả MỚI NHẤT từ máy chủ rồi mới ghi điểm AI (tránh đè lên bài nộp vừa cập nhật)
+          const ref = db.doc('results/'+t.doc.uid), snap = await ref.get();
+          const fresh = snap.exists ? (snap.data() || {}) : null;
+          const attF = fresh && (fresh.attempts || {})[ex.id];
+          if(!attF) throw new Error('bài nộp không còn trên máy chủ');
+          attF.ai = attF.ai || {};
+          attF.ai[t.c.qi] = {score: r.score, comment: r.comment || '', max: r.maxScore || t.c.maxScore, at: Date.now()};
+          await ref.set({uid: t.doc.uid, attempts: fresh.attempts});
+          okN++;
+        }catch(e){ errs.push('Câu '+t.c.q.num+' — '+((t.att.name || t.doc.uid)+'').slice(0,40)+': '+(e.message || e)); }
+      }
+      setProg(ex.id, 'Hoàn tất: '+okN+'/'+targets.length+' bài chấm thành công.'+(errs.length ? '\nLỗi '+errs.length+' bài — '+errs.slice(0,3).join(' | ')+(errs.length > 3 ? ' …' : '') : '')+'\nĐiểm AI là ĐIỂM ĐỀ XUẤT — hãy kiểm tra và nhập điểm chính thức trong bảng kết quả.');
+    }catch(e){
+      setProg(ex.id, 'Lỗi khi chấm AI: '+(e.message || e));
+    }finally{ aiBusy = false; renderDash(); }
+  }
+
+  // Giảng viên nhập/sửa điểm chính thức cho 1 câu tự luận (ghi vào trường mới att.man — dữ liệu cũ giữ nguyên)
+  async function saveManualScore(u, examId, qi, val){
+    const doc = resultsCache.find(d=>d.uid === u); if(!doc) return;
+    const att = (doc.attempts || {})[examId]; if(!att) return;
+    att.man = att.man || {};
+    const n = val === '' ? NaN : parseFloat(val);
+    if(isNaN(n) || n < 0) delete att.man[qi]; else att.man[qi] = Math.round(n*100)/100;
+    if(!Object.keys(att.man).length) delete att.man;
+    try{ await db.doc('results/'+u).set({uid: u, attempts: doc.attempts}); }
+    catch(e){ alert('Không lưu được điểm: '+(e.message || e)); }
+  }
+
   function renderList(){
     const box = $('examList'); box.innerHTML = '';
     const open = examsCache.filter(e=>e.status !== 'closed');
@@ -788,6 +990,8 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
   async function publishExam(){
     const btn = $('btnPublish'); btn.disabled = true; btn.textContent = 'Đang xuất bản…';
     try{
+      // Lưu cấu hình chấm AI của từng câu tự luận (trường mới q.ai — cấu trúc cũ không đổi)
+      examData.questions.forEach((q,qi)=>{ if(q.type === 'essay' && aiBoxes[qi]) q.ai = aiBoxes[qi]._read(); });
       const title = $('examName').value.trim() || ('Đề thi '+new Date().toLocaleDateString('vi-VN'));
       const used = new Set(); JSON.stringify(examData).replace(/\[\[IMG:(\d+)\]\]/g,(m,i)=> used.add(i));
       const assets = await claude.use('assets'), map = {};
@@ -804,27 +1008,59 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
     const box = $('dashList'); box.innerHTML = '';
     if(!examsCache.length) box.appendChild(el('p','muted','Chưa có đề nào được xuất bản.'));
     examsCache.forEach(ex=>{
-      const rows = []; resultsCache.forEach(r=>{ const a = (r.attempts || {})[ex.id]; if(a) rows.push(a); });
+      const rows = []; resultsCache.forEach(r=>{ const a = (r.attempts || {})[ex.id]; if(a) rows.push({uid: r.uid, a}); });
       const c = el('div','qcard'), hd = el('div','qhead');
       hd.append(el('span','qnum',ex.title), el('span','qtype',ex.status === 'closed' ? 'Đã đóng' : 'Đang mở'), el('span','qtype',ex.count+' câu'));
       c.append(hd, el('p','muted','Đăng lúc '+fmt(ex.createdAt)+' · '+rows.length+' lượt nộp'));
       const bar = el('div','row'); bar.style.marginTop = '0';
       const b1 = el('button','',selExam === ex.id ? 'Ẩn kết quả' : 'Xem kết quả'); b1.addEventListener('click', ()=>{ selExam = selExam === ex.id ? null : ex.id; renderDash(); });
       const b2 = el('button','',ex.status === 'closed' ? 'Mở lại' : 'Đóng đề'); b2.addEventListener('click', ()=> db.doc('exams/'+ex.id).update({status: ex.status === 'closed' ? 'open' : 'closed'}));
+      let hasEssay = false; try{ hasEssay = (JSON.parse(ex.data).questions || []).some(q=>q.type === 'essay'); }catch(e){}
+      let b4 = null;
+      if(hasEssay){ b4 = el('button','', aiOpen === ex.id ? 'Ẩn chấm AI' : '🤖 Chấm AI tự luận'); b4.addEventListener('click', ()=>{ aiOpen = aiOpen === ex.id ? null : ex.id; renderDash(); }); }
       const b3 = el('button','ghost','Xóa đề'); b3.addEventListener('click', ()=>{ if(confirm('Xóa đề "'+ex.title+'"?')) db.doc('exams/'+ex.id).delete(); });
-      bar.append(b1,b2,b3); c.appendChild(bar);
+      bar.append(b1,b2); if(b4) bar.append(b4); bar.append(b3); c.appendChild(bar);
       if(selExam === ex.id){
         const t = el('table','rt'), hr = el('tr');
-        ['Họ tên','MSSV','Điểm TN','Nộp lúc','Tự luận'].forEach(h=> hr.appendChild(el('th','',h))); t.appendChild(hr);
-        rows.sort((a,b)=>b.at-a.at).forEach(a=>{
+        ['Họ tên','MSSV','Điểm TN','Điểm TL','Nộp lúc','Tự luận'].forEach(h=> hr.appendChild(el('th','',h))); t.appendChild(hr);
+        rows.sort((x,y)=>y.a.at-x.a.at).forEach(({uid:ru, a})=>{
           const tr = el('tr'); let es = {}; try{ es = JSON.parse(a.essays || '{}'); }catch(e){}
+          // Cột "Điểm TL": điểm chính thức giảng viên đã nhập (att.man) — nếu chưa thì hiện điểm AI đề xuất
+          const manK = Object.keys(a.man || {}), aiK = Object.keys(a.ai || {});
+          const tdS = el('td');
+          if(manK.length){
+            let s = 0, mx = 0, hasMax = false;
+            manK.forEach(k=>{ s += (+a.man[k] || 0); const mm = a.ai && a.ai[k] && +a.ai[k].max; if(mm){ mx += mm; hasMax = true; } });
+            tdS.textContent = (Math.round(s*100)/100) + (hasMax ? '/'+(Math.round(mx*100)/100) : '');
+          } else if(aiK.length){
+            let s = 0, mx = 0;
+            aiK.forEach(k=>{ s += (+a.ai[k].score || 0); mx += (+a.ai[k].max || 0); });
+            tdS.appendChild(el('span','ai-sugg','🤖 '+(Math.round(s*100)/100)+'/'+(Math.round(mx*100)/100)));
+          } else tdS.textContent = '—';
           const td = el('td'); const keys = Object.keys(es);
-          if(keys.length){ const d = el('details'); d.appendChild(el('summary','',keys.length+' câu')); keys.forEach(k=>{ const pp = el('div','qstem','Câu '+k+': '+es[k]); pp.style.fontSize='13px'; d.appendChild(pp); }); td.appendChild(d); } else td.textContent = '—';
-          tr.append(el('td','',a.name), el('td','',a.sid), el('td','',a.score == null ? '—' : a.score+'/'+a.total), el('td','',fmt(a.at)), td);
+          if(keys.length){
+            const d = el('details'); d.appendChild(el('summary','',keys.length+' câu'));
+            keys.forEach(k=>{
+              const pp = el('div','qstem','Câu '+k+': '+es[k]); pp.style.fontSize='13px'; d.appendChild(pp);
+              const ai = (a.ai || {})[k];
+              if(ai){
+                d.appendChild(el('span','ai-sugg','🤖 AI đề xuất: '+ai.score+(ai.max ? '/'+ai.max : '')+' điểm'));
+                if(ai.comment) d.appendChild(el('div','ai-comment','Nhận xét AI: '+ai.comment));
+              }
+              const inp = document.createElement('input'); inp.type='number'; inp.className='man-score';
+              inp.min='0'; inp.step='0.25'; inp.placeholder='Điểm chính thức';
+              if(a.man && a.man[k] != null) inp.value = a.man[k];
+              inp.addEventListener('change', ()=> saveManualScore(ru, ex.id, k, inp.value));
+              d.appendChild(inp);
+            });
+            td.appendChild(d);
+          } else td.textContent = '—';
+          tr.append(el('td','',a.name), el('td','',a.sid), el('td','',a.score == null ? '—' : a.score+'/'+a.total), tdS, el('td','',fmt(a.at)), td);
           t.appendChild(tr);
         });
         c.appendChild(rows.length ? t : el('p','muted','Chưa có sinh viên nộp bài.'));
       }
+      if(aiOpen === ex.id) c.appendChild(buildAiPanel(ex));
       box.appendChild(c);
     });
   }
@@ -834,6 +1070,7 @@ footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20
         const user = await claude.use('user');
         if(user){ isAdmin = await user.canEdit(); try{ uid = await user.id(); }catch(e){} }
         db = await claude.use('db');
+        if(isAdmin){ try{ aiStatus = await aiApi('status'); }catch(e){ aiStatus = {enabled:false, model:null}; } }
       }
     }catch(e){ console.error(e); }
     $('badge').style.display = isAdmin ? '' : 'none';
