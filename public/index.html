@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Đề Thi Số — Tạo bài thi từ file đề</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+:root{
+  --bg:#F7F6F2; --surface:#FFFFFF; --ink:#1C1B1A; --ink-soft:#6B6862;
+  --line:#E3E1DB; --accent:#2454D6; --accent-soft:#EAF0FF;
+  --good:#1E7F4C; --good-soft:#E7F6EE; --bad:#C0392B; --bad-soft:#FBEAE8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171614; --surface:#211F1C; --ink:#EDEBE6; --ink-soft:#A7A39B;
+    --line:#39362F; --accent:#6C93FF; --accent-soft:#1E2A4A;
+    --good:#4CC187; --good-soft:#163424; --bad:#E8776A; --bad-soft:#3A1E1B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171614; --surface:#211F1C; --ink:#EDEBE6; --ink-soft:#A7A39B;
+  --line:#39362F; --accent:#6C93FF; --accent-soft:#1E2A4A;
+  --good:#4CC187; --good-soft:#163424; --bad:#E8776A; --bad-soft:#3A1E1B;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  line-height:1.6; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:20;}
+header{
+  position:sticky; top:0; top:env(safe-area-inset-top,0px); z-index:10;
+  background:var(--bg); border-bottom:1px solid var(--line);
+  padding:16px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.brand{font-weight:800; font-size:20px; letter-spacing:-0.01em;}
+.brand span{color:var(--accent);}
+.brandbox{display:flex;gap:12px;align-items:center;cursor:pointer;}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--accent);display:grid;place-items:center;flex:none;}
+.sub{font-size:12px;color:var(--ink-soft);}
+.hright{display:flex;gap:10px;align-items:center;}
+.badge{font-size:12px;font-weight:700;color:#7B2FD6;background:#F3E9FF;border:1px solid #DDC6FA;border-radius:20px;padding:6px 12px;}
+.home{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:24px;margin-top:14px;}
+.hcard{text-align:center;padding:34px 24px;box-shadow:0 10px 30px rgba(0,0,0,.06);}
+.ico{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;margin:0 auto 18px;}
+.ico.b{background:var(--accent-soft);color:var(--accent);} .ico.p{background:#F5EBFF;color:#9333EA;}
+.hcard h2{font-size:20px;margin-bottom:10px;} .hcard p{color:var(--ink-soft);font-size:14px;margin:0 0 22px;}
+.hbtn{width:100%;border-radius:30px;padding:14px;color:#fff;border:0;font-size:15px;}
+.hbtn.b{background:#2563EB;} .hbtn.p{background:#9333EA;}
+.link{background:none;border:0;color:var(--accent);padding:10px 0 0;font-size:13px;}
+input[type=text]{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--bg);color:var(--ink);font-family:inherit;font-size:14.5px;outline:none;}
+input[type=text]:focus{border-color:var(--accent);}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 18px;}
+table.rt{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;}
+table.rt th,table.rt td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top;}
+.msg{font-size:13px;color:var(--bad);margin:0 0 10px;}
+.timer{font-variant-numeric:tabular-nums; font-size:13px; color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); padding:6px 12px; border-radius:20px; display:none;}
+main{max-width:760px; margin:0 auto; padding:28px 20px 80px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:24px;}
+h1{font-size:26px; margin:0 0 6px; letter-spacing:-0.01em;}
+h2{font-size:17px; margin:0 0 4px;}
+p.muted{color:var(--ink-soft); margin:0 0 20px; font-size:14px;}
+.drop{
+  border:1.5px dashed var(--line); border-radius:12px; padding:40px 20px; text-align:center;
+  cursor:pointer; transition:border-color .15s, background .15s;
+}
+.drop:hover, .drop.drag{border-color:var(--accent); background:var(--accent-soft);}
+.drop svg{margin-bottom:10px; color:var(--ink-soft);}
+.drop b{display:block; font-size:15px; margin-bottom:4px;}
+.drop small{color:var(--ink-soft); font-size:13px;}
+input[type=file]{display:none;}
+.formats{display:flex; gap:8px; justify-content:center; margin-top:14px; flex-wrap:wrap;}
+.chip{font-size:12px; color:var(--ink-soft); border:1px solid var(--line); border-radius:20px; padding:3px 10px;}
+.status{margin-top:16px; font-size:13px; color:var(--ink-soft); display:none;}
+.status.show{display:block;}
+textarea{
+  width:100%; min-height:360px; resize:vertical; border:1px solid var(--line); border-radius:10px;
+  padding:16px; background:var(--bg); color:var(--ink); font-family:inherit; font-size:15px;
+  line-height:1.7; white-space:pre-wrap; outline:none;
+}
+textarea:focus{border-color:var(--accent);}
+.row{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;}
+button{
+  font-family:inherit; font-size:14px; font-weight:600; border-radius:9px; padding:11px 18px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer;
+  transition:transform .08s, border-color .15s;
+}
+button:active{transform:scale(.97);}
+button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+button.ghost{background:transparent;}
+button:disabled{opacity:.45; cursor:not-allowed;}
+.summary-bar{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px;}
+.pill{font-size:13px; background:var(--accent-soft); color:var(--accent); border-radius:20px; padding:6px 14px; font-weight:600;}
+.qcard{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:16px;}
+.qhead{display:flex; gap:10px; align-items:baseline; margin-bottom:12px;}
+.qnum{font-weight:700; color:var(--accent); flex:none;}
+.qtype{font-size:11px; color:var(--ink-soft); border:1px solid var(--line); border-radius:12px; padding:2px 9px; flex:none;}
+.qstem{white-space:pre-wrap; word-wrap:break-word; font-size:15.5px;}
+.opt{
+  display:flex; gap:10px; align-items:flex-start; padding:11px 12px; border:1px solid var(--line);
+  border-radius:9px; margin-top:8px; cursor:pointer; transition:border-color .12s, background .12s;
+}
+.opt:hover{border-color:var(--accent);}
+.opt input{margin-top:3px; flex:none; accent-color:var(--accent);}
+.opt label{cursor:pointer; white-space:pre-wrap; word-wrap:break-word; flex:1;}
+.opt.correct{border-color:var(--good); background:var(--good-soft);}
+.opt.wrong{border-color:var(--bad); background:var(--bad-soft);}
+.opt-letter{font-weight:700; flex:none; width:18px;}
+.essay-area{
+  width:100%; min-height:110px; margin-top:10px; border:1px solid var(--line); border-radius:9px;
+  padding:12px; background:var(--bg); color:var(--ink); font-family:inherit; font-size:14.5px; line-height:1.6;
+  resize:vertical;
+}
+.essay-area:focus{outline:none; border-color:var(--accent);}
+.verdict{font-size:13px; font-weight:600; margin-top:10px;}
+.verdict.good{color:var(--good);}
+.verdict.bad{color:var(--bad);}
+.score-card{text-align:center; padding:30px 24px; margin-bottom:20px;}
+.score-num{font-size:44px; font-weight:800; color:var(--accent); letter-spacing:-0.02em;}
+.score-label{color:var(--ink-soft); font-size:14px; margin-top:4px;}
+.qimg{max-width:100%;height:auto;display:block;margin:10px 0;border-radius:6px;background:#fff;}
+.opt .qimg{margin:6px 0;max-height:260px;}
+.sec{font-weight:700;color:var(--accent);margin:22px 0 10px;font-size:14px;}
+.strip{display:none;gap:10px;flex-wrap:wrap;margin-top:14px;}
+.strip figure{margin:0;width:110px;font-size:11px;color:var(--ink-soft);text-align:center;}
+.strip img{max-width:100%;max-height:80px;border:1px solid var(--line);border-radius:6px;background:#fff;}
+.hidden{display:none !important;}
+footer{text-align:center; color:var(--ink-soft); font-size:12px; padding:24px 20px 40px;}
+@media (max-width:480px){
+  main{padding:20px 14px 70px;} .card,.qcard{padding:18px;} h1{font-size:22px;}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brandbox" id="brandHome" title="Về trang chủ">
+    <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3"/></svg></div>
+    <div><div class="brand">ExamWeb.<span>Duckie</span>.edu.vn</div><div class="sub">Nền tảng thi và đánh giá trực tuyến</div></div>
+  </div>
+  <div class="hright"><button class="ghost" id="btnLogin" style="padding:6px 12px;font-size:12px">Giảng viên đăng nhập</button><span class="badge" id="badge" style="display:none">🛡 Đang dùng quyền Quản trị viên</span><div class="timer" id="timer">00:00</div></div>
+</header>
+
+<main>
+
+  <!-- HOME -->
+  <section id="screen-home">
+    <div class="home">
+      <div class="card hcard"><div class="ico b"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1"/></svg></div>
+        <h2>Dành cho Sinh Viên</h2><p>Truy cập danh sách các bài thi đang mở, điền thông tin và bắt đầu làm bài ngay lập tức.</p>
+        <button class="hbtn b" id="btnStudent">Vào phòng thi →</button></div>
+      <div class="card hcard"><div class="ico p"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></div>
+        <h2>Dành cho Giảng Viên</h2><p>Tự động bóc tách file đề thi (PDF/Word) thành form trắc nghiệm và tự luận, kèm hình ảnh.</p>
+        <button class="hbtn p" id="btnTeacher">Tạo đề thi mới ＋</button>
+        <button class="link" id="btnDash" style="display:none">Quản lý đề &amp; xem kết quả</button></div>
+    </div>
+    <p class="muted" id="syncNote" style="text-align:center;margin-top:22px;"></p>
+  </section>
+
+  <!-- STUDENT: EXAM LIST -->
+  <section id="screen-list" class="card hidden">
+    <h1>Phòng thi</h1><p class="muted">Điền thông tin rồi chọn đề đang mở. Danh sách cập nhật trực tuyến.</p>
+    <div class="two"><input type="text" id="stuName" placeholder="Họ và tên" maxlength="60"><input type="text" id="stuId" placeholder="Mã số sinh viên" maxlength="30"></div>
+    <div class="msg" id="joinMsg"></div>
+    <div id="examList"></div>
+    <div class="row"><button class="ghost" id="btnListHome">← Trang chủ</button></div>
+  </section>
+
+  <!-- TEACHER: DASHBOARD -->
+  <section id="screen-dash" class="hidden">
+    <div class="card" style="margin-bottom:16px"><h1>Quản lý đề thi</h1><p class="muted" style="margin:0">Đề đã xuất bản hiển thị ngay cho sinh viên; kết quả nộp bài đồng bộ về đây.</p></div>
+    <div id="dashList"></div>
+    <div class="row"><button class="primary" id="btnDashNew">＋ Tạo đề thi mới</button><button class="ghost" id="btnDashHome">← Trang chủ</button></div>
+  </section>
+
+  <!-- SCREEN 1: UPLOAD -->
+  <section id="screen-upload" class="card">
+    <h1>Tạo bài thi từ file đề</h1>
+    <p class="muted">Tải lên file đề thi — hệ thống tự nhận diện câu trắc nghiệm và câu tự luận, rồi dựng thành giao diện làm bài.</p>
+    <div class="drop" id="drop">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 15V3m0 0L7 8m5-5l5 5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      <b>Nhấn để chọn file hoặc kéo-thả vào đây</b>
+      <small>Hỗ trợ .docx, .pdf, .txt</small>
+    </div>
+    <input type="file" id="fileInput" accept=".docx,.pdf,.txt">
+    <div class="formats">
+      <span class="chip">Word (.docx)</span><span class="chip">PDF (.pdf)</span><span class="chip">Văn bản (.txt)</span>
+    </div>
+    <div class="status" id="uploadStatus"></div>
+    <div class="row"><button class="ghost" id="btnUpHome">← Trang chủ</button></div>
+  </section>
+
+  <!-- SCREEN 2: PREVIEW / EDIT EXTRACTED TEXT -->
+  <section id="screen-preview" class="card hidden">
+    <h2>Kiểm tra nội dung đã trích xuất</h2>
+    <p class="muted">Sửa lại trực tiếp nếu phát hiện lỗi font, thiếu chữ hoặc sai định dạng — nội dung sau khi sửa sẽ được dùng để dựng đề. Mã [[IMG:n]] là vị trí hình ảnh — di chuyển hoặc xóa mã để đổi vị trí hình trong đề.</p>
+    <input type="text" id="examName" placeholder="Tên đề thi (hiển thị cho sinh viên)" maxlength="100" style="margin-bottom:12px">
+    <textarea id="rawText" spellcheck="false"></textarea>
+    <div class="strip" id="imgStrip"></div>
+    <div class="row">
+      <button class="primary" id="btnGenerate">Tạo đề thi</button>
+      <button class="ghost" id="btnBackUpload">← Chọn file khác</button>
+    </div>
+  </section>
+
+  <!-- SCREEN 3: EXAM -->
+  <section id="screen-exam" class="hidden">
+    <div class="summary-bar">
+      <span class="pill" id="pillTotal"></span>
+      <span class="pill" id="pillMC"></span>
+      <span class="pill" id="pillEssay"></span>
+    </div>
+    <div id="examTitle" class="card" style="margin-bottom:16px;"></div>
+    <div id="questionList"></div>
+    <div class="row">
+      <button class="primary" id="btnSubmit">Nộp bài</button>
+      <button class="primary" id="btnPublish" style="display:none">Xuất bản đề lên hệ thống</button>
+      <button class="ghost" id="btnBackPreview2">← Quay lại chỉnh nội dung</button>
+    </div>
+  </section>
+
+  <!-- SCREEN 4: RESULTS -->
+  <section id="screen-result" class="hidden">
+    <div class="card score-card" id="scoreCard"></div>
+    <div id="resultList"></div>
+    <div class="row">
+      <button class="primary" id="btnRestart">Về trang chủ</button>
+    </div>
+  </section>
+
+</main>
+<footer>Trích xuất và chấm điểm diễn ra ngay trên trình duyệt — không gửi file lên máy chủ nào.</footer>
+
+<script>
+/* Adapter: cung cấp window.claude.use('user'|'db'|'assets') bằng API của server này. */
+(function(){
+  var TK = 'dts_admin_token', UK = 'dts_uid';
+  var token = null, uid = null;
+  try{ token = localStorage.getItem(TK); uid = localStorage.getItem(UK); }catch(e){}
+  if(!uid){
+    uid = 'u' + Array.from(crypto.getRandomValues(new Uint8Array(12))).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+    try{ localStorage.setItem(UK, uid); }catch(e){}
+  }
+  var admin = false;
+  function hdr(extra){ var h = Object.assign({}, extra); if(token) h.Authorization = 'Bearer ' + token; return h; }
+  async function api(method, url, body, type){
+    var r = await fetch(url, {method: method, headers: hdr(type ? {'Content-Type': type} : (body !== undefined ? {'Content-Type':'application/json'} : {})), body: body === undefined ? undefined : (type ? body : JSON.stringify(body))});
+    var j = await r.json().catch(function(){ return {}; });
+    if(!r.ok){ var e = new Error(j.error || ('Lỗi ' + r.status)); e.code = r.status; throw e; }
+    return j;
+  }
+  function snapDoc(x){ return {id: x.id, data: function(){ return x.data; }}; }
+
+  function col(name, order){
+    var c = {
+      orderBy: function(f, dir){ return col(name, {f: f, dir: dir || 'asc'}); },
+      add: async function(data){ var r = await api('POST', '/api/c/' + name, data); return {id: r.id}; },
+      onSnapshot: function(ok, bad){
+        var stop = false, last = '';
+        async function tick(){
+          try{
+            var list = await api('GET', '/api/c/' + name);
+            if(order) list.sort(function(a,b){ var x = a.data[order.f], y = b.data[order.f]; return (x > y ? 1 : x < y ? -1 : 0) * (order.dir === 'desc' ? -1 : 1); });
+            var s = JSON.stringify(list);
+            if(s !== last){ last = s; ok({docs: list.map(snapDoc)}); }
+          }catch(e){ if(bad) bad(e); }
+        }
+        tick();
+        var h = setInterval(function(){ if(!stop && !document.hidden) tick(); }, 4000);
+        return function(){ stop = true; clearInterval(h); };
+      }
+    };
+    return c;
+  }
+  var dbApi = {
+    collection: function(name){ return col(name); },
+    doc: function(p){
+      var a = p.split('/'), name = a[0], id = a[1], u = '/api/d/' + name + '/' + id;
+      return {
+        get: async function(){ var r = await api('GET', u); return {exists: !!r.exists, data: function(){ return r.data; }}; },
+        set: function(d){ return api('PUT', u, d); },
+        update: function(d){ return api('PATCH', u, d); },
+        delete: function(){ return api('DELETE', u); }
+      };
+    }
+  };
+  var userApi = { canEdit: async function(){ await window.__dtsReady; return admin; }, id: async function(){ return uid; }, isOwner: function(){ return admin; } };
+  var assetsApi = { upload: async function(blob){ return api('POST', '/api/upload', blob, blob.type || 'image/png'); } };
+
+  window.claude = { use: async function(n){
+    if(n === 'user') return userApi;
+    if(n === 'db') return dbApi;
+    if(n === 'assets') return admin ? assetsApi : null;
+    return null;
+  }};
+
+  // Nút đăng nhập / đăng xuất giảng viên
+  var btn = document.getElementById('btnLogin');
+  window.__dtsReady = (async function(){
+    if(token){ try{ admin = (await api('GET', '/api/me')).admin; if(!admin){ token = null; localStorage.removeItem(TK); } }catch(e){ admin = false; } }
+    btn.textContent = admin ? 'Đăng xuất' : 'Giảng viên đăng nhập';
+  })();
+  btn.addEventListener('click', async function(){
+    if(admin){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); return; }
+    var pw = prompt('Nhập mật khẩu giảng viên:'); if(!pw) return;
+    try{
+      var r = await api('POST', '/api/login', {password: pw});
+      try{ localStorage.setItem(TK, r.token); }catch(e){}
+      location.reload();
+    }catch(e){ alert(e.message || 'Đăng nhập thất bại'); }
+  });
+})();
+
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const screens = ['home','list','dash','upload','preview','exam','result'].reduce((o,k)=>(o[k]=$('screen-'+k),o),{});
+  function show(name){ Object.entries(screens).forEach(([k,el])=> el.classList.toggle('hidden', k!==name)); }
+
+  let examData = null; // {title, intro, questions:[], answerKey:{}}
+  let timerHandle = null, startTime = null;
+  let mode = 'teacher', curExam = null, db = null, uid = null, isAdmin = false, examsCache = [], resultsCache = [], selExam = null, stu = {name:'', sid:''};
+
+  // ---------- FILE EXTRACTION ----------
+  const drop = $('drop'), fileInput = $('fileInput'), uploadStatus = $('uploadStatus');
+  drop.addEventListener('click', ()=> fileInput.click());
+  ['dragover','dragenter'].forEach(ev=> drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=> drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.remove('drag');}));
+  drop.addEventListener('drop', e=>{ if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+  function setStatus(msg, isError){
+    uploadStatus.textContent = msg;
+    uploadStatus.style.color = isError ? 'var(--bad)' : 'var(--ink-soft)';
+    uploadStatus.classList.add('show');
+  }
+
+  let IMGS = {}, imgSeq = 0;
+  function addImg(src){ const id = ++imgSeq; IMGS[id] = src; return id; }
+  function rich(t){
+    return escapeHtml(t||'').replace(/\[\[IMG:(\d+)\]\]/g,(m,id)=> IMGS[id] ? '<img class="qimg" src="'+IMGS[id]+'" alt="Hình '+id+'">' : '');
+  }
+  function showStrip(){
+    const st = $('imgStrip'); st.innerHTML = '';
+    Object.keys(IMGS).forEach(id=>{ const f = document.createElement('figure'); f.innerHTML = '<img src="'+IMGS[id]+'" alt=""><figcaption>[[IMG:'+id+']]</figcaption>'; st.appendChild(f); });
+    st.style.display = Object.keys(IMGS).length ? 'flex' : 'none';
+  }
+
+  // ----- DOCX: mammoth -> HTML (giữ thứ tự hình/chữ, hình nhúng base64) -----
+  const SUPM = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','n':'ⁿ'};
+  const SUBM = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋'};
+  function inline(node){
+    let o = '';
+    node.childNodes.forEach(n=>{
+      if(n.nodeType === 3){ o += n.nodeValue; return; }
+      if(n.nodeType !== 1) return;
+      const t = n.tagName.toLowerCase();
+      if(t === 'img'){
+        const src = n.getAttribute('src') || '';
+        o += /^data:image\/(png|jpe?g|gif|webp|svg\+xml|bmp)/i.test(src) ? ' [[IMG:'+addImg(src)+']] ' : ' [hình không hiển thị được trên trình duyệt (WMF/EMF)] ';
+      } else if(t === 'br') o += '\n';
+      else if(t === 'sup' || t === 'sub'){
+        const x = inline(n), M = t === 'sup' ? SUPM : SUBM;
+        o += [...x].every(c=>M[c]) ? [...x].map(c=>M[c]).join('') : (t === 'sup' ? '^' : '_') + (x.length > 1 ? '('+x+')' : x);
+      } else if(t === 'p' || t === 'div') o += inline(n) + '\n';
+      else o += inline(n);
+    });
+    return o;
+  }
+  async function readDocx(buf){
+    const r = await mammoth.convertToHtml({arrayBuffer: buf});
+    const doc = new DOMParser().parseFromString(r.value, 'text/html');
+    const lines = [];
+    (function blocks(el){
+      el.childNodes.forEach(n=>{
+        if(n.nodeType !== 1) return;
+        const t = n.tagName.toLowerCase();
+        if(t === 'table') n.querySelectorAll('tr').forEach(tr=> lines.push([...tr.children].map(c=>inline(c).trim()).join('   ')));
+        else if(['ul','ol','div','blockquote'].includes(t)) blocks(n);
+        else lines.push(inline(n));
+      });
+    })(doc.body);
+    return lines.map(l=>l.replace(/[ \t]*\n[ \t]*/g,'\n').trim()).filter(Boolean).join('\n\n');
+  }
+
+  // ----- PDF: chữ + cắt hình từ trang render, ghép theo vị trí dọc -----
+  async function readPdf(buf){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    const OPS = pdfjsLib.OPS, U = pdfjsLib.Util, pages = [];
+    for(let p = 1; p <= pdf.numPages; p++){
+      setStatus('Đang đọc trang '+p+'/'+pdf.numPages+'…');
+      const page = await pdf.getPage(p), vp = page.getViewport({scale: 2});
+      const content = await page.getTextContent();
+      const items = content.items.filter(i=>i.str && i.str.trim()).map(i=>{
+        const m = U.transform(vp.transform, i.transform);
+        return {x:m[4], y:m[5], w:i.width*2, h:Math.max(Math.abs(m[3]), 8), s:i.str};
+      });
+      // vị trí hình
+      const imgs = [], ol = await page.getOperatorList(), st = [];
+      let ctm = [1,0,0,1,0,0];
+      ol.fnArray.forEach((fn,k)=>{
+        const a = ol.argsArray[k];
+        if(fn === OPS.save) st.push(ctm);
+        else if(fn === OPS.restore) ctm = st.pop() || [1,0,0,1,0,0];
+        else if(fn === OPS.transform) ctm = U.transform(ctm, a);
+        else if(fn === OPS.paintFormXObjectBegin){ st.push(ctm); if(a[0]) ctm = U.transform(ctm, a[0]); }
+        else if(fn === OPS.paintFormXObjectEnd) ctm = st.pop() || [1,0,0,1,0,0];
+        else if(fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject || fn === OPS.paintJpegXObject){
+          const m = U.transform(vp.transform, ctm);
+          const xs = [m[4], m[4]+m[0], m[4]+m[2], m[4]+m[0]+m[2]], ys = [m[5], m[5]+m[1], m[5]+m[3], m[5]+m[1]+m[3]];
+          const r = {x0:Math.min(...xs), x1:Math.max(...xs), y0:Math.min(...ys), y1:Math.max(...ys)};
+          const w = r.x1-r.x0, h = r.y1-r.y0;
+          if(w < 40 || h < 40 || (w > vp.width*0.95 && h > vp.height*0.95)) return;
+          if(imgs.some(q=>Math.abs(q.x0-r.x0)<4 && Math.abs(q.y0-r.y0)<4 && Math.abs(q.x1-r.x1)<4)) return;
+          imgs.push(r);
+        }
+      });
+      if(imgs.length){
+        const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+        const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,cv.width,cv.height);
+        await page.render({canvasContext: g, viewport: vp}).promise;
+        imgs.forEach(im=>{
+          const x = Math.max(0, Math.floor(im.x0)), y = Math.max(0, Math.floor(im.y0));
+          const w = Math.min(cv.width-x, Math.ceil(im.x1-x)), h = Math.min(cv.height-y, Math.ceil(im.y1-y));
+          if(w < 2 || h < 2) return;
+          const c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+          c2.getContext('2d').drawImage(cv, x, y, w, h, 0, 0, w, h);
+          im.id = addImg(c2.toDataURL('image/png'));
+        });
+      }
+      // gom dòng theo toạ độ y (không phụ thuộc thứ tự trong file)
+      items.sort((a,b)=>a.y-b.y || a.x-b.x);
+      const lines = [];
+      items.forEach(it=>{
+        const L = lines[lines.length-1];
+        if(L && Math.abs(it.y-L.y) <= Math.max(4, it.h*0.45)) L.parts.push(it);
+        else lines.push({y:it.y, h:it.h, parts:[it]});
+      });
+      imgs.filter(im=>im.id).forEach(im=>{
+        const tok = '[[IMG:'+im.id+']]';
+        const L = lines.find(L=> L.y >= im.y0 && L.y <= im.y1 && (im.y1-im.y0) < L.h*4);
+        if(L) L.parts.push({x:im.x0, w:im.x1-im.x0, tok, h:L.h});
+        else lines.push({y:im.y0, h:20, parts:[{x:im.x0, w:0, tok, h:20}]});
+      });
+      lines.sort((a,b)=>a.y-b.y);
+      pages.push(lines.map(L=>{
+        L.parts.sort((a,b)=>a.x-b.x);
+        let o = '', end = null;
+        L.parts.forEach(pt=>{
+          const txt = pt.tok ? ' '+pt.tok+' ' : pt.s;
+          if(o && !pt.tok && end !== null && pt.x-end > pt.h*0.2 && !/\s$/.test(o)) o += ' ';
+          o += txt; end = pt.x + (pt.w||0);
+        });
+        return o.trim();
+      }).join('\n'));
+    }
+    return pages.join('\n\n');
+  }
+
+  async function handleFile(file){
+    const name = file.name.toLowerCase();
+    setStatus('Đang đọc file "'+file.name+'"…');
+    IMGS = {}; imgSeq = 0;
+    try{
+      let text = '';
+      if(name.endsWith('.docx')) text = await readDocx(await file.arrayBuffer());
+      else if(name.endsWith('.pdf')) text = await readPdf(await file.arrayBuffer());
+      else text = await file.text();
+      text = cleanText(text);
+      if(!text.replace(/\[\[IMG:\d+\]\]/g,'').trim()) throw new Error('file không có lớp chữ (có thể là bản scan/ảnh chụp) — cần OCR hoặc gõ lại nội dung');
+      $('rawText').value = text;
+      showStrip();
+      show('preview');
+      setTimeout(()=> $('rawText').focus(), 50);
+    } catch(err){
+      console.error(err);
+      setStatus('Không đọc được file này. Thử lưu lại dưới định dạng .docx, .pdf hoặc .txt rồi tải lại. ('+err.message+')', true);
+    }
+  }
+
+  function cleanText(t){
+    return t
+      .normalize('NFC')
+      .replace(/\r\n?/g,'\n')
+      .replace(/\u00A0/g,' ')
+      .replace(/[ \t]+\n/g,'\n')
+      .replace(/\n{3,}/g,'\n\n')
+      .replace(/[ \t]{2,}/g,' ')
+      .trim();
+  }
+
+  // ---------- PARSING ----------
+  $('btnGenerate').addEventListener('click', ()=>{
+    const text = cleanText($('rawText').value);
+    if(!text.trim()){ alert('Chưa có nội dung để tạo đề.'); return; }
+    examData = parseExam(text);
+    if(examData.questions.length === 0){
+      alert('Không tìm thấy câu hỏi nào dạng "Câu 1:", "Câu 2:"… Hãy kiểm tra lại định dạng trong ô nội dung.');
+      return;
+    }
+    mode = 'teacher'; curExam = null; $('btnBackPreview2').textContent = '← Quay lại chỉnh nội dung';
+    renderExam(examData);
+    show('exam');
+    startTimer();
+    $('btnPublish').style.display = (db && isAdmin) ? '' : 'none';
+  });
+  $('btnBackUpload').addEventListener('click', ()=>{ show('upload'); fileInput.value=''; uploadStatus.classList.remove('show'); });
+  $('btnBackPreview2').addEventListener('click', ()=>{ stopTimer(); show(mode === 'student' ? 'list' : 'preview'); });
+
+  const LET = 'ABCDEF';
+  const SEC_RE = /^(?:PHẦN|Phần|PHAN|Part|Section)\s+(?:[IVX]+|\d+)\b/;
+  function parseExam(text){
+    // Đáp án: lấy tiêu đề CUỐI CÙNG nằm riêng một dòng (tránh cắt nhầm câu hỏi có chữ "Đáp án nào...")
+    const keyRe = /\n[ \t]*(?:ĐÁP\s*ÁN|DAP\s*AN|ANSWER\s*KEY)(?:[ \t]+(?:CHI\s*TIẾT|THAM\s*KHẢO|ĐỀ\s*\d+))?[ \t]*[:\-–]?([^\n]*)/gi;
+    const restOk = /^(?:[\s,;]*(?:Câu\s*)?\d{1,3}\s*[\.\):\-]?\s*[A-F]\b)+[\s,;]*$/i;
+    let keyMatch = null, km;
+    while((km = keyRe.exec(text))){ if(!km[1].trim() || restOk.test(km[1])) keyMatch = km; }
+    let body = text, keySection = '';
+    if(keyMatch){ body = text.slice(0, keyMatch.index); keySection = text.slice(keyMatch.index); }
+    const answerKey = {};
+    if(keySection){
+      const pairRe = /(\d{1,3})\s*[\.\):\-]?\s*([A-F])\b/g; let m;
+      while((m = pairRe.exec(keySection))){ if(!(m[1] in answerKey)) answerKey[m[1]] = m[2]; }
+    }
+    const qRe = /\n\s*(?:Câu|CÂU|Bài|BÀI|Question)\s*(\d{1,3})\s*(?:\([^)\n]{0,40}\)\s*)?[\.:\)]/g;
+    const marks = [], padded = '\n' + body; let m2;
+    while((m2 = qRe.exec(padded))){ marks.push({num:m2[1], idx:m2.index, mlen:m2[0].length}); }
+    const intro = marks.length ? padded.slice(0, marks[0].idx).trim() : padded.trim();
+    const questions = []; let pending = '';
+    for(let i=0;i<marks.length;i++){
+      const start = marks[i].idx + marks[i].mlen;
+      const end = i+1 < marks.length ? marks[i+1].idx : padded.length;
+      const q = parseBlock(padded.slice(start, end).trim(), marks[i].num);
+      q.section = pending; pending = q.trail; delete q.trail;
+      questions.push(q);
+    }
+    return { intro, questions, answerKey };
+  }
+
+  // tìm các đáp án A. B. C. D. (kể cả nằm chung 1 dòng), bắt buộc theo đúng thứ tự chữ cái
+  function findOpts(line, k0){
+    const found = []; let from = 0;
+    for(let k=k0;k<LET.length;k++){
+      const L = LET[k]; let r = null;
+      if(from === 0){ const mm = new RegExp('^'+L+'[\\.\\):]\\s*').exec(line); if(mm) r = {at:0, end:mm[0].length}; }
+      if(!r){
+        const re = new RegExp('\\s'+L+'[\\.\\)](?=\\s|$|\\[\\[)','g'); re.lastIndex = from;
+        const mm = re.exec(line); if(mm) r = {at:mm.index+1, end:mm.index+mm[0].length};
+      }
+      if(!r) break;
+      found.push({k, at:r.at, end:r.end}); from = r.end;
+    }
+    return (found.length >= 2 || (found.length === 1 && found[0].at === 0)) ? found : [];
+  }
+
+  // ghép dòng: xuống dòng khi có đoạn mới / hình / gạch đầu dòng, còn lại nối bằng dấu cách
+  function joinLines(arr){
+    let o = '', blank = true, prevTok = false;
+    arr.forEach(l=>{
+      if(!l){ blank = true; return; }
+      const tok = /^\[\[IMG:\d+\]\]$/.test(l), lst = /^(?:[a-hA-H][\.\)]|\d{1,2}[\.\)]|[-•+*–])\s/.test(l);
+      o += !o ? l : ((blank || tok || prevTok || lst) ? '\n'+l : ' '+l);
+      blank = false; prevTok = tok;
+    });
+    return o;
+  }
+
+  function parseBlock(block, num){
+    const lines = block.split('\n').map(l=>l.trim());
+    const stem = [], all = [], trail = [], opts = {}, order = [];
+    let cur = null, inTrail = false;
+    for(const line of lines){
+      if(inTrail || SEC_RE.test(line)){ inTrail = true; if(line) trail.push(line); continue; }
+      all.push(line);
+      if(!line){ (cur ? opts[cur] : stem).push(''); continue; }
+      const f = findOpts(line, order.length);
+      if(f.length){
+        const pre = line.slice(0, f[0].at).trim();
+        if(pre) (cur ? opts[cur] : stem).push(pre);
+        f.forEach((o,i)=>{
+          const L = LET[o.k]; order.push(L);
+          opts[L] = [line.slice(o.end, i+1 < f.length ? f[i+1].at : undefined).trim()]; cur = L;
+        });
+      } else (cur ? opts[cur] : stem).push(line);
+    }
+    const tr = trail.join(' ');
+    if(order.length >= 2){
+      const options = {}; order.forEach(L=> options[L] = joinLines(opts[L]));
+      return {type:'mc', num, stem: joinLines(stem), order, options, trail: tr};
+    }
+    return {type:'essay', num, stem: joinLines(all), trail: tr};
+  }
+
+  // ---------- RENDER EXAM ----------
+  function renderExam(data){
+    const mcCount = data.questions.filter(q=>q.type==='mc').length;
+    const essayCount = data.questions.length - mcCount;
+    $('pillTotal').textContent = data.questions.length + ' câu';
+    $('pillMC').textContent = mcCount + ' trắc nghiệm';
+    $('pillEssay').textContent = essayCount + ' tự luận';
+    $('pillEssay').style.display = essayCount ? '' : 'none';
+
+    const titleBox = $('examTitle');
+    titleBox.innerHTML = ''; titleBox.style.display = '';
+    if(data.intro){
+      const h = document.createElement('div');
+      h.className = 'qstem'; h.style.fontWeight = '600'; h.style.fontSize='16px';
+      h.innerHTML = rich(data.intro);
+      titleBox.appendChild(h);
+    } else {
+      titleBox.style.display = 'none';
+    }
+
+    const list = $('questionList');
+    list.innerHTML = '';
+    data.questions.forEach((q,qi)=>{
+      if(q.section){ const sh = document.createElement('div'); sh.className = 'sec'; sh.textContent = q.section; list.appendChild(sh); }
+      const card = document.createElement('div'); card.className = 'qcard'; card.dataset.num = qi;
+      const head = document.createElement('div'); head.className = 'qhead';
+      head.innerHTML = '<span class="qnum">Câu '+q.num+'</span><span class="qtype">'+(q.type==='mc'?'Trắc nghiệm':'Tự luận')+'</span>';
+      card.appendChild(head);
+      const stem = document.createElement('div'); stem.className = 'qstem'; stem.innerHTML = rich(q.stem);
+      card.appendChild(stem);
+      if(q.type==='mc'){
+        q.order.forEach(letter=>{
+          const opt = document.createElement('div'); opt.className='opt'; opt.dataset.letter=letter;
+          opt.innerHTML = '<input type="radio" name="q'+qi+'" value="'+letter+'" id="q'+qi+letter+'">'+
+            '<label for="q'+qi+letter+'"><span class="opt-letter">'+letter+'.</span> '+rich(q.options[letter])+'</label>';
+          opt.addEventListener('click', ()=>{ opt.querySelector('input').checked = true; });
+          card.appendChild(opt);
+        });
+      } else {
+        const ta = document.createElement('textarea');
+        ta.className = 'essay-area'; ta.placeholder = 'Nhập câu trả lời…'; ta.dataset.num = qi;
+        card.appendChild(ta);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ---------- SUBMIT / GRADE ----------
+  $('btnSubmit').addEventListener('click', ()=>{
+    stopTimer();
+    const hasKey = Object.keys(examData.answerKey).length > 0;
+    let correct = 0, mcTotal = 0;
+    const resultList = $('resultList'); resultList.innerHTML = '';
+
+    examData.questions.forEach((q,qi)=>{
+      if(q.type === 'mc'){
+        if(examData.answerKey[q.num] || !hasKey) mcTotal++;
+        const card = document.querySelector('.qcard[data-num="'+qi+'"]');
+        const checked = card.querySelector('input[type=radio]:checked');
+        const given = checked ? checked.value : null;
+        const correctLetter = examData.answerKey[q.num];
+        const item = document.createElement('div'); item.className = 'qcard';
+        item.innerHTML = '<div class="qhead"><span class="qnum">Câu '+q.num+'</span><span class="qtype">Trắc nghiệm</span></div>'+
+          '<div class="qstem">'+rich(q.stem)+'</div>';
+        q.order.forEach(letter=>{
+          const row = document.createElement('div'); row.className = 'opt';
+          if(hasKey && letter === correctLetter) row.classList.add('correct');
+          if(hasKey && letter === given && given !== correctLetter) row.classList.add('wrong');
+          row.innerHTML = '<span class="opt-letter">'+letter+'.</span><span>'+rich(q.options[letter])+(letter===given?'  ← bạn chọn':'')+'</span>';
+          item.appendChild(row);
+        });
+        if(hasKey){
+          const ok = given === correctLetter;
+          if(ok) correct++;
+          const v = document.createElement('div'); v.className = 'verdict ' + (ok?'good':'bad');
+          v.textContent = ok ? 'Đúng' : (given ? 'Sai — đáp án đúng là '+correctLetter : 'Chưa trả lời — đáp án đúng là '+correctLetter);
+          item.appendChild(v);
+        } else if(!given){
+          const v = document.createElement('div'); v.className = 'verdict bad'; v.textContent = 'Chưa trả lời';
+          item.appendChild(v);
+        }
+        resultList.appendChild(item);
+      } else {
+        const ta = document.querySelector('.essay-area[data-num="'+qi+'"]');
+        const item = document.createElement('div'); item.className = 'qcard';
+        item.innerHTML = '<div class="qhead"><span class="qnum">Câu '+q.num+'</span><span class="qtype">Tự luận</span></div>'+
+          '<div class="qstem">'+rich(q.stem)+'</div>'+
+          '<div class="qstem" style="margin-top:10px; color:var(--ink-soft);">'+(ta.value.trim() ? escapeHtml(ta.value) : '(chưa trả lời)')+'</div>'+
+          '<div class="verdict" style="color:var(--ink-soft);">Câu tự luận — cần chấm thủ công</div>';
+        resultList.appendChild(item);
+      }
+    });
+
+    const scoreCard = $('scoreCard');
+    if(hasKey && mcTotal > 0){
+      scoreCard.innerHTML = '<div class="score-num">'+correct+'/'+mcTotal+'</div><div class="score-label">câu trắc nghiệm đúng'+
+        (examData.questions.length > mcTotal ? ' · phần tự luận cần chấm thủ công' : '')+'</div>';
+    } else {
+      scoreCard.innerHTML = '<div class="score-num">✓</div><div class="score-label">Đã nộp bài — không tìm thấy đáp án trong file để tự chấm trắc nghiệm</div>';
+    }
+    afterSubmit(correct, mcTotal, hasKey);
+    show('result');
+  });
+
+  $('btnRestart').addEventListener('click', ()=>{
+    examData = null; IMGS = {}; imgSeq = 0; $('imgStrip').innerHTML = ''; fileInput.value=''; $('rawText').value=''; uploadStatus.classList.remove('show');
+    goHome();
+  });
+
+  // ---------- TIMER ----------
+  function startTimer(){
+    clearInterval(timerHandle); startTime = Date.now();
+    $('timer').style.display = 'inline-block';
+    timerHandle = setInterval(()=>{
+      const s = Math.floor((Date.now()-startTime)/1000);
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      $('timer').textContent = mm+':'+ss;
+    }, 1000);
+  }
+  function stopTimer(){ clearInterval(timerHandle); $('timer').style.display = 'none'; }
+
+  // ---------- TRANG CHỦ / ĐỒNG BỘ ----------
+  function el(t,c,x){ const e = document.createElement(t); if(c) e.className = c; if(x != null) e.textContent = x; return e; }
+  const fmt = ts => new Date(ts).toLocaleString('vi-VN');
+  function goHome(){ stopTimer(); show('home'); }
+  function goDash(){ renderDash(); show('dash'); }
+  function dataToBlob(u){
+    const [h,b] = u.split(','); const mime = h.match(/:(.*?);/)[1], bin = atob(b), a = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i);
+    return new Blob([a], {type:mime});
+  }
+  try{ $('stuName').value = localStorage.getItem('stuName')||''; $('stuId').value = localStorage.getItem('stuId')||''; }catch(e){}
+  $('brandHome').addEventListener('click', goHome);
+  $('btnListHome').addEventListener('click', goHome); $('btnDashHome').addEventListener('click', goHome); $('btnUpHome').addEventListener('click', goHome);
+  $('btnStudent').addEventListener('click', ()=>{ renderList(); show('list'); });
+  $('btnTeacher').addEventListener('click', ()=> show('upload'));
+  $('btnDashNew').addEventListener('click', ()=> show('upload'));
+  $('btnDash').addEventListener('click', goDash);
+  $('btnPublish').addEventListener('click', publishExam);
+
+  function renderList(){
+    const box = $('examList'); box.innerHTML = '';
+    const open = examsCache.filter(e=>e.status !== 'closed');
+    if(!db) box.appendChild(el('p','muted','Chưa kết nối được máy chủ — hãy tải lại trang.'));
+    else if(!open.length) box.appendChild(el('p','muted','Hiện chưa có bài thi nào đang mở.'));
+    open.forEach(ex=>{
+      const c = el('div','qcard'), hd = el('div','qhead');
+      hd.append(el('span','qnum',ex.title), el('span','qtype',ex.count+' câu'));
+      c.append(hd, el('p','muted','Đăng lúc '+fmt(ex.createdAt)));
+      const b = el('button','primary','Làm bài'); b.addEventListener('click', ()=> openExam(ex)); c.appendChild(b);
+      box.appendChild(c);
+    });
+  }
+  function openExam(ex){
+    stu = {name: $('stuName').value.trim(), sid: $('stuId').value.trim()};
+    if(!stu.name || !stu.sid){ $('joinMsg').textContent = 'Vui lòng nhập họ tên và mã số sinh viên trước khi làm bài.'; return; }
+    $('joinMsg').textContent = '';
+    try{ localStorage.setItem('stuName', stu.name); localStorage.setItem('stuId', stu.sid); }catch(e){}
+    try{ examData = JSON.parse(ex.data); IMGS = JSON.parse(ex.images || '{}'); }catch(e){ $('joinMsg').textContent = 'Đề thi bị lỗi dữ liệu.'; return; }
+    mode = 'student'; curExam = ex;
+    $('btnPublish').style.display = 'none'; $('btnBackPreview2').textContent = '← Thoát';
+    renderExam(examData); show('exam'); startTimer();
+  }
+  async function afterSubmit(correct, total, hasKey){
+    if(mode !== 'student' || !curExam) return;
+    const note = el('div','score-label','Đang lưu kết quả…'); $('scoreCard').appendChild(note);
+    try{
+      if(!db || !uid) throw new Error('offline');
+      const essays = {}; document.querySelectorAll('.essay-area').forEach(t=>{ if(t.value.trim()) essays[t.dataset.num] = t.value; });
+      const ref = db.doc('results/'+uid), snap = await ref.get();
+      const att = snap.exists ? ((snap.data()||{}).attempts || {}) : {};
+      att[curExam.id] = {name:stu.name, sid:stu.sid, score: hasKey ? correct : null, total: hasKey ? total : null, at: Date.now(), essays: JSON.stringify(essays).slice(0,20000)};
+      await ref.set({uid, attempts: att});
+      note.textContent = 'Đã lưu kết quả lên hệ thống ✓';
+    }catch(e){ console.error(e); note.textContent = 'Không lưu được kết quả lên hệ thống — hãy chụp màn hình gửi giảng viên.'; }
+  }
+  async function publishExam(){
+    const btn = $('btnPublish'); btn.disabled = true; btn.textContent = 'Đang xuất bản…';
+    try{
+      const title = $('examName').value.trim() || ('Đề thi '+new Date().toLocaleDateString('vi-VN'));
+      const used = new Set(); JSON.stringify(examData).replace(/\[\[IMG:(\d+)\]\]/g,(m,i)=> used.add(i));
+      const assets = await claude.use('assets'), map = {};
+      for(const id of used){
+        const src = IMGS[id]; if(!src) continue;
+        if(assets && src.startsWith('data:')){ const r = await assets.upload(dataToBlob(src)); map[id] = r.url; } else map[id] = src;
+      }
+      await db.collection('exams').add({title, createdAt: Date.now(), createdBy: uid || '', status:'open', count: examData.questions.length, data: JSON.stringify(examData), images: JSON.stringify(map)});
+      stopTimer(); goDash();
+    }catch(e){ alert('Không xuất bản được: '+(e.message || e.code || e)); }
+    btn.disabled = false; btn.textContent = 'Xuất bản đề lên hệ thống';
+  }
+  function renderDash(){
+    const box = $('dashList'); box.innerHTML = '';
+    if(!examsCache.length) box.appendChild(el('p','muted','Chưa có đề nào được xuất bản.'));
+    examsCache.forEach(ex=>{
+      const rows = []; resultsCache.forEach(r=>{ const a = (r.attempts || {})[ex.id]; if(a) rows.push(a); });
+      const c = el('div','qcard'), hd = el('div','qhead');
+      hd.append(el('span','qnum',ex.title), el('span','qtype',ex.status === 'closed' ? 'Đã đóng' : 'Đang mở'), el('span','qtype',ex.count+' câu'));
+      c.append(hd, el('p','muted','Đăng lúc '+fmt(ex.createdAt)+' · '+rows.length+' lượt nộp'));
+      const bar = el('div','row'); bar.style.marginTop = '0';
+      const b1 = el('button','',selExam === ex.id ? 'Ẩn kết quả' : 'Xem kết quả'); b1.addEventListener('click', ()=>{ selExam = selExam === ex.id ? null : ex.id; renderDash(); });
+      const b2 = el('button','',ex.status === 'closed' ? 'Mở lại' : 'Đóng đề'); b2.addEventListener('click', ()=> db.doc('exams/'+ex.id).update({status: ex.status === 'closed' ? 'open' : 'closed'}));
+      const b3 = el('button','ghost','Xóa đề'); b3.addEventListener('click', ()=>{ if(confirm('Xóa đề "'+ex.title+'"?')) db.doc('exams/'+ex.id).delete(); });
+      bar.append(b1,b2,b3); c.appendChild(bar);
+      if(selExam === ex.id){
+        const t = el('table','rt'), hr = el('tr');
+        ['Họ tên','MSSV','Điểm TN','Nộp lúc','Tự luận'].forEach(h=> hr.appendChild(el('th','',h))); t.appendChild(hr);
+        rows.sort((a,b)=>b.at-a.at).forEach(a=>{
+          const tr = el('tr'); let es = {}; try{ es = JSON.parse(a.essays || '{}'); }catch(e){}
+          const td = el('td'); const keys = Object.keys(es);
+          if(keys.length){ const d = el('details'); d.appendChild(el('summary','',keys.length+' câu')); keys.forEach(k=>{ const pp = el('div','qstem','Câu '+k+': '+es[k]); pp.style.fontSize='13px'; d.appendChild(pp); }); td.appendChild(d); } else td.textContent = '—';
+          tr.append(el('td','',a.name), el('td','',a.sid), el('td','',a.score == null ? '—' : a.score+'/'+a.total), el('td','',fmt(a.at)), td);
+          t.appendChild(tr);
+        });
+        c.appendChild(rows.length ? t : el('p','muted','Chưa có sinh viên nộp bài.'));
+      }
+      box.appendChild(c);
+    });
+  }
+  async function initCloud(){
+    try{
+      if(window.claude && claude.use){
+        const user = await claude.use('user');
+        if(user){ isAdmin = await user.canEdit(); try{ uid = await user.id(); }catch(e){} }
+        db = await claude.use('db');
+      }
+    }catch(e){ console.error(e); }
+    $('badge').style.display = isAdmin ? '' : 'none';
+    $('btnDash').style.display = (isAdmin && db) ? '' : 'none';
+    $('syncNote').textContent = db ? 'Đề thi và kết quả được đồng bộ trực tuyến giữa mọi người dùng.' : 'Chưa kết nối được máy chủ — chỉ dùng cục bộ.';
+    if(!db) return;
+    db.collection('exams').orderBy('createdAt','desc').onSnapshot(sn=>{ examsCache = sn.docs.map(d=>Object.assign({id:d.id}, d.data())); renderList(); renderDash(); }, e=>console.error(e));
+    if(isAdmin) db.collection('results').onSnapshot(sn=>{ resultsCache = sn.docs.map(d=>d.data()); renderDash(); }, e=>console.error(e));
+  }
+
+  show('home');
+  initCloud();
+})();
+</script>
+</body>
+</html>
