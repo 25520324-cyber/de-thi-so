@@ -191,6 +191,42 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return aiFail(res, e); }
     }
 
+    if (p === '/api/ai/mc-key' && m === 'POST') {
+      if (!isAdmin(req)) return send(res, 401, { error: 'Cần quyền giảng viên' });
+      const j = JSON.parse((await body(req, 256e3)).toString() || '{}');
+      const qsIn = Array.isArray(j.questions) ? j.questions.slice(0, 20) : [];
+      const clean = [];
+      for (const q of qsIn) {
+        if (!q || typeof q !== 'object') continue;
+        const num = String(q.num == null ? '' : q.num).trim().slice(0, 10);
+        const stem = clip(q.stem, 2000).text;
+        const opts = {};
+        if (q.options && typeof q.options === 'object') {
+          for (const L of Object.keys(q.options)) {
+            if (/^[A-F]$/.test(L)) opts[L] = clip(q.options[L], 500).text;
+          }
+        }
+        if (!num || !stem.trim() || Object.keys(opts).length < 2) continue;
+        clean.push({ num, stem, options: opts });
+      }
+      if (!clean.length) return send(res, 400, { error: 'Không có câu trắc nghiệm hợp lệ để AI đề xuất đáp án.' });
+      try {
+        const content = await aiChat([
+          { role: 'system', content: 'Bạn là chuyên gia giải đề thi trắc nghiệm. Với mỗi câu hỏi, chọn MỘT chữ cái là đáp án đúng nhất. CHỈ trả về một đối tượng JSON hợp lệ duy nhất dạng {"answers": {"<số câu>": "<chữ cái>"}} — đủ mọi câu được hỏi, không giải thích, không dùng dấu ```.' },
+          { role: 'user', content: clean.map(q => 'Câu ' + q.num + ':\n' + q.stem + '\n' + Object.keys(q.options).map(L => L + '. ' + q.options[L]).join('\n')).join('\n\n') }
+        ]);
+        const o = parseAiJson(content);
+        const got = o && o.answers && typeof o.answers === 'object' ? o.answers : null;
+        if (!got) throw new AiError(502, 'AI không trả về đáp án hợp lệ — hãy thử lại.');
+        const answers = {}, missing = [];
+        for (const q of clean) {
+          const L = String(got[q.num] == null ? '' : got[q.num]).trim().toUpperCase().charAt(0);
+          if (Object.prototype.hasOwnProperty.call(q.options, L)) answers[q.num] = L; else missing.push(q.num);
+        }
+        return send(res, 200, { answers, missing });
+      } catch (e) { return aiFail(res, e); }
+    }
+
     // /api/c/:col  và  /api/d/:col/:id
     const seg = p.split('/').filter(Boolean);
     if (seg[0] === 'api' && (seg[1] === 'c' || seg[1] === 'd')) {
